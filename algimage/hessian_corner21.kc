@@ -1,0 +1,366 @@
+//After Chen & Zhang:
+//"A New Sub-Pixel Detector for X-Corners in Camera Calibration Targets"
+//WSCG’2005, January 31-February 4, 2005
+enum {imax=1024,kmax=1024,fmax=65536};
+static lx,ly;
+static ker[kmax];
+static wbox[kmax][kmax];
+static sig,tol,siz;
+()
+{
+   static img0[imax][imax];
+   static img1[imax][imax];
+   static img2[imax][imax];
+   static feat[fmax][7];
+   static k=0;
+   if(numframes==0){
+      //cls(0);
+      loadimg(img0);
+      gkernel(0.5,0.001,&siz,ker);
+      convolve(img0,img1);
+      k=Hessian_corner(3,0.001,img1,feat);
+      gkernel(3,0.001,&siz,ker);
+      convolve(img0,img1);
+      sclimg(0.5,0,img1,img0);
+      if(0) for(i=0;i<k;i++){
+         printf("%f.0:\t %f\t%f\t%f\n",i,feat[i][0],feat[i][1],feat[i][2]);
+      }
+      cls(0);
+   }
+   
+   showimg(img0);
+   
+   moveto(10,10);
+   setcol(0xffffff);
+   printf("k= %f",k);
+   setcol(0xffff00);
+   showfeat(k,feat,1);
+   zoomit(mousx,mousy,img0,feat,k);
+   moveto(0,0);
+   if(0) for(i=0;i<k;i++){
+         printf("%3.0f:\t %3.6f\t%3.6f\t%3.6f\t%3.6f\t%3.6f\t%3.6f\t%3.6f\n",
+         i,feat[i][0],feat[i][1],feat[i][2],
+         feat[i][3],feat[i][4],feat[i][5],feat[i][6]);
+      }  
+}
+loadimg(im[imax][imax])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   if(lx>imax)lx=imax;if(ly>imax)ly=imax;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(im[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*256;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+diffimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]-in2[y][x];
+}
+addimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]+in2[y][x];
+}
+mulimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]*in2[y][x];
+}
+copyimg(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in[y][x];
+}
+sclimg(m,s,in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=m*in[y][x]+s;
+}
+absimg(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=abs(in[y][x]);
+}
+gkernel(sig,tol,&siz,k[kmax])
+{
+   if(sig<0.1){
+      siz=0;
+      k[0]=1;
+      return;
+   }
+   d=sig*sqrt(-2*log(tol*sig*sqrt(2*pi)));
+   siz=ceil(d-0.5);d=siz+0.5;
+   v=1/(sig*sqrt(2*pi));
+   for(i=0;i<(2*siz+1);i++){
+      k[i]=0;
+      for(j=0;j<10;j++){
+         x=i-d+0.1*j+0.05;
+         k[i]+=v*exp(-x*x/(2*sig*sig));
+      }
+      k[i]*=0.1;
+   }
+}
+convolvex(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++){
+      for(x=0;x<siz;x++){
+         m=0;
+         for(i=-x;i<=siz;i++)m+=in[y][x+i]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(x=siz;x<lx-siz;x++){
+         m=0;
+         for(i=-siz;i<=siz;i++)m+=in[y][x+i]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(x=lx-siz;x<lx;x++){
+         m=0;
+         for(i=-siz;i<=(lx-x);i++)m+=in[y][x+i]*ker[i+siz];
+         out[y][x]=m;
+      }
+   }
+}
+convolvey(in[imax][imax],out[imax][imax])
+{
+   for(x=0;x<lx;x++){
+      for(y=0;y<siz;y++){
+         m=0;
+         for(i=-y;i<=siz;i++)m+=in[y+i][x]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(y=siz;y<ly-siz;y++){
+         m=0;
+         for(i=-siz;i<=siz;i++)m+=in[y+i][x]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(y=ly-siz;y<ly;y++){
+         m=0;
+         for(i=-siz;i<=(ly-y);i++)m+=in[y+i][x]*ker[i+siz];
+         out[y][x]=m;
+      }
+   }
+}
+convolve(in[imax][imax],out[imax][imax])
+{
+   static img[1024][1024];
+   convolvex(in,img);
+   convolvey(img,out);
+}
+gradx(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=1;x<lx-1;x++)
+         out[y][x]=in[y][x+1]-in[y][x-1];
+}
+grady(in[imax][imax],out[imax][imax])
+{
+   for(y=1;y<ly-1;y++)
+      for(x=0;x<lx;x++)
+         out[y][x]=in[y+1][x]-in[y-1][x];
+}
+localmax(in[imax][imax],out[imax][imax])
+{
+   k=0;
+   d=0;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         out[y][x]=0;
+         if(in[y][x]>0)
+         if((in[y][x]>in[y][x+1]+d)&&(in[y][x]>in[y][x-1]+d)&&
+            (in[y][x]>in[y+1][x]+d)&&(in[y][x]>in[y-1][x]+d)&&
+            (in[y][x]>in[y+1][x+1]+d)&&(in[y][x]>in[y+1][x-1]+d)&&
+            (in[y][x]>in[y-1][x+1]+d)&&(in[y][x]>in[y-1][x-1]+d)){ 
+                out[y][x]=in[y][x];
+                k++;
+         } 
+      }
+   k;
+}
+quicksort(a[fmax][7],i0,i1)// adapted from sorttest.kc
+{
+   if (i1-i0 <= 1) return;
+   v0 = a[i0][2]; v1 = a[i0+1][2]; v2 = a[i1-1][2]; //v = median of 3 elements
+          i = min(v0,v1); if (v2 < i) v = i;
+   else { i = v0+v1-i;    if (v2 > i) v = i;
+   else                               v = v2; }
+
+   j0 = i0; j1 = i1;
+   for(i=i0;i<j1;i++)
+   {
+      if (a[i][2] > v){
+         t = a[j0][0]; a[j0][0] = a[i][0]; a[i][0] = t;
+         t = a[j0][1]; a[j0][1] = a[i][1]; a[i][1] = t;
+         t = a[j0][2]; a[j0][2] = a[i][2]; a[i][2] = t;
+         t = a[j0][3]; a[j0][3] = a[i][3]; a[i][3] = t;
+         t = a[j0][4]; a[j0][4] = a[i][4]; a[i][4] = t;
+         t = a[j0][5]; a[j0][5] = a[i][5]; a[i][5] = t;
+         t = a[j0][6]; a[j0][6] = a[i][6]; a[i][6] = t; 
+         j0++; 
+      }
+      else if (a[i][2] < v){
+         j1--; 
+         t = a[j1][0]; a[j1][0] = a[i][0]; a[i][0] = t;
+         t = a[j1][1]; a[j1][1] = a[i][1]; a[i][1] = t;
+         t = a[j1][2]; a[j1][2] = a[i][2]; a[i][2] = t;
+         t = a[j1][3]; a[j1][3] = a[i][3]; a[i][3] = t;
+         t = a[j1][4]; a[j1][4] = a[i][4]; a[i][4] = t;
+         t = a[j1][5]; a[j1][5] = a[i][5]; a[i][5] = t;
+         t = a[j1][6]; a[j1][6] = a[i][6]; a[i][6] = t; 
+         i--;
+      }
+   }
+   quicksort(a,i0,j0);
+   quicksort(a,j1,i1);
+}
+grabfeat(in[imax][imax],out[fmax][7])
+{
+   k=0;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++)
+         if(in[y][x]){
+            out[k][0]=x;out[k][1]=y;out[k][2]=in[y][x];
+            k++;
+         }
+   k;
+}
+cleanfeat(k,feat[fmax][7])
+{
+   dp=0;k1=0;
+   for(i=1;i<k;i++){
+      d=feat[i-1][2]-feat[i][2];
+      if(d>dp) {dp=d;k1=i;}
+   }
+   k1;   
+}
+calcfeatvecs(k,feat[fmax][7])
+{
+   for(i=0;i<k;i++){
+      if(feat[i][2]!=0){ //continue; 
+      rxx=feat[i][3];ryy=feat[i][4];rxy=feat[i][5];
+      trc=rxx+ryy;det=rxx*ryy-rxy*rxy;
+      d=sqrt(trc*trc-4*det);
+      l1=0.5*(trc+d);l2=0.5*(trc-d);
+      if(abs(l2)>abs(l1)){
+         tmp=l1;l1=l2;l2=tmp;
+      }
+      //if(det>0) cls(0xff0000);
+      if(d>1e-15){
+         nx=sqrt((l1-ryy)/(2*l1-trc));
+         ny=sqrt((l1-rxx)/(2*l1-trc));
+      }else{
+         nx=1; ny=0;
+      }
+      feat[i][3]=l1;feat[i][4]=l2;
+      feat[i][5]=nx;feat[i][6]=ny;
+      feat[i][2]*=abs(l2/l1);
+      }
+   }  
+}
+Hessian_corner(s,t,in[imax][imax],feat[fmax][7])
+{
+   static gx[imax][imax],gy[imax][imax],gg[imax][imax];
+   static gxs[imax][imax],gys[imax][imax];
+   static tmp[imax][imax],tmp2[imax][imax];
+   
+   gkernel(s,t,&siz,ker);
+   convolve(in,tmp);
+   
+   gradx(tmp,gx);grady(tmp,gy);
+   copyimg(gx,gxs);copyimg(gy,gys);
+   grady(gx,gg);
+   copyimg(gx,tmp);gradx(tmp,gx);
+   copyimg(gy,tmp);grady(tmp,gy);
+   
+   //s*=s;
+   for(y=siz;y<(ly-siz);y++)
+      for(x=siz;x<(lx-siz);x++){
+         m00=gx[y][x];m01=gg[y][x];m11=gy[y][x];
+         //trc=m00+m11;
+         det=-(m00*m11-m01*m01);
+         if(det<0) det=0;
+         tmp[y][x]=det;///(gxs[y][x]^2+gys[y][x]^2+0.1);//trc*trc+4*det;
+      }
+   sclimg(200,0,tmp,tmp2);
+   showimg(tmp2);
+   localmax(tmp,tmp2);
+   k=grabfeat(tmp2,feat);
+   for(i=0;i<k;i++){
+      x=feat[i][0];y=feat[i][1];
+      if((x<=siz)||(y<=siz)||(lx-x<=siz)||(ly-y<=siz))//bug in convolve()
+         feat[i][2]=0;
+      else feat[i][2]/=(gxs[y][x]^2+gys[y][x]^2+0.001);
+      feat[i][3]=gx[y][x];feat[i][4]=gy[y][x];feat[i][5]=gg[y][x];
+   }
+   
+   calcfeatvecs(k,feat);
+   quicksort(feat,0,k);
+   //On elimine les coins tres faibles et ceux en V
+   //On ne garde que ceux en X
+   //return k;
+   k=cleanfeat(k,feat);
+   //return k;
+   //precision
+   for(i=0;i<k;i++){
+      x=feat[i][0];y=feat[i][1];
+      rx=gxs[y][x];ry=gys[y][x];
+      rxx=gx[y][x];ryy=gy[y][x];rxy=gg[y][x];
+      d=rxx*ryy-rxy*rxy;
+      s=(ry*rxy-rx*ryy);t=(rx*rxy-ry*rxx);
+      s/=d;t/=d;
+      feat[i][0]+=s;feat[i][1]+=t;
+   }
+   k;
+}
+showfeat(k,feat[fmax][7],stat)
+{
+   setcol(0x8fff8f);
+   for(i=0;i<k;i++){
+      //c=feat[i][2]*256*50;
+      //setcol(c,c,255-c);
+      setpix(feat[i][0]+0.5,feat[i][1]+0.5);
+   }
+   z=100/feat[0][2];
+   if(stat){
+      setcol(0xff0000);
+      for(i=0;i<k;i++){
+         moveto(i+120,yres-1);lineto(i+120,yres-feat[i][2]*z);
+      }
+      setcol(0xff0000);
+      for(i=1;i<k;i++){
+         moveto(i+120,0);lineto(i+120,(feat[i-1][2]-feat[i][2])*z*5);
+      }
+   }
+}
+zoomit(mx,my,img[imax][imax],feat[fmax][7],k)
+{
+   for(j=0;j<105;j++)
+      for(i=0;i<105;i++){
+         x=int(0.2*i);y=int(0.2*j);
+         x+=mx-10;y+=my-10;
+         c=img[y][x]*256*2;
+         setcol(c,c,c);setpix(i,(yres-105)+j);
+      }
+   setcol(0x80ff80);
+   for(i=0;i<k;i++){
+      x=feat[i][0];y=feat[i][1];
+      x-=mx;y-=my;x+=10.5;y+=10.5;
+      if((x>=0) && (y>=0) && (x<21) && (y<21)){
+         x*=5;y*=5;y=y+yres-105;
+         setpix(x,y);
+         moveto(x,y);lineto(x+feat[i][5]*feat[i][3]*300,y+feat[i][6]*feat[i][3]*300);
+         moveto(x,y);lineto(x+feat[i][6]*feat[i][4]*300,y-feat[i][5]*feat[i][4]*300);
+      }
+   }
+}

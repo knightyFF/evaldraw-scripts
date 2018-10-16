@@ -1,0 +1,129 @@
+enum {imax=1024,kmax=1024};
+static lx,ly;
+//static boxsiz;
+()
+{
+   static img0[1024][1024];
+   static img1[1024][1024];
+   static img2[1024][1024];
+   static sig,tol,siz;
+   if(numframes==0){
+      loadimg(img0);
+      
+      //diffimg(img0,img1,img2);
+      //sclimg(1,0.5,img2,img2);
+      cls(0);
+   }
+   siz=abs(mousx*0.02);
+   GaussBoxFilt(siz,siz,img0,img1);
+   showimg(img1);
+}
+loadimg(im[imax][imax])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   if(lx>imax)lx=imax;if(ly>imax)ly=imax;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(im[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*256;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+diffimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]-in2[y][x];
+}
+addimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]+in2[y][x];
+}
+sclimg(m,s,in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=m*in[y][x]+s;
+}
+
+bcg1D(siz1,ds,d,in[imax],out[imax],id[kmax])
+{
+      m=0;
+      for(x=-siz1;x<0;x++){
+         m+=in[x+siz1];
+      }
+      for(x=0;x<siz1;x++){
+         m+=in[x+siz1];
+         out[x]=(m+ds*in[x+siz1+1])*id[x];
+      }
+         //x=siz1;
+         m+=in[x+siz1];
+         out[x]=(m+ds*in[x+siz1+1])*id[x];
+         m-=in[x-siz1];
+      for(x=siz1+1;x<lx-siz1-1;x++){
+         m+=in[x+siz1];
+         out[x]=(m+ds*(in[x+siz1+1]+in[x-siz1-1]))*d;
+         m-=in[x-siz1];
+      }
+         //x=lx-siz1-1;
+         m+=in[x+siz1];
+         out[x]=(m+ds*in[x-siz1-1])*id[lx-x-1];
+         m-=in[x-siz1];
+      for(x=lx-siz1;x<lx;x++){
+         out[x]=(m+ds*in[x-siz1-1])*id[lx-x-1];
+         m-=in[x-siz1];
+      }     
+}
+//Verifier le cas ou siz>=lx: ce serra different!!!
+bgcx(siz,in[imax][imax],out[imax][imax])
+{
+   static id[kmax],buf1[kmax],buf2[kmax];
+   if(siz<=0.5){
+      sclimg(1,0,in,out);return;
+   }
+   siz-=0.5;
+   siz1=floor(siz);ds=siz-siz1;
+   for(i=0; i<siz;i++) id[i]=1/(siz+1+i);
+   id[i]=1/(2*siz1+1+ds);
+   d=1/(2*siz+1);
+   for(y=0;y<ly;y++){
+      for(x=0;x<lx;x++)buf1[x]=in[y][x];
+      bcg1D(siz1,ds,d,buf1,buf2,id);
+      bcg1D(siz1,ds,d,buf2,buf1,id);
+      for(x=0;x<lx;x++)out[y][x]=buf1[x];
+   }
+}
+//Verifier le cas ou siz>=lx: ce serra different!!!
+bgcy(siz,in[imax][imax],out[imax][imax])
+{
+   static id[kmax],buf1[kmax],buf2[kmax];
+   if(siz<=0.5){
+      sclimg(1,0,in,out);return;
+   }
+   siz-=0.5;
+   siz1=floor(siz);ds=siz-siz1;
+   for(i=0; i<siz;i++) id[i]=1/(siz+1+i);
+   id[i]=1/(2*siz1+1+ds);
+   d=1/(2*siz+1);
+   for(x=0;x<lx;x++){
+      for(y=0;y<ly;y++)buf1[y]=in[y][x];
+      bcg1D(siz1,ds,d,buf1,buf2,id);
+      bcg1D(siz1,ds,d,buf2,buf1,id);
+      for(y=0;y<ly;y++)out[y][x]=buf1[y];
+   }
+}
+GaussBoxFilt(sigx,sigy,in[imax][imax],out[imax][imax])
+{
+   static img[imax][imax];
+   sizx=sqrt(6*sigx*sigx);sizy=sqrt(6*sigy*sigy);//formule 3ayyana!
+   bgcx(sizx,in,img);
+   bgcy(sizy,img,out);
+}

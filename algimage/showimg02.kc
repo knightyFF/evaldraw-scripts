@@ -1,0 +1,57 @@
+()
+{
+   static img0[1024][1024];
+   static gker[1024];
+   static lx,ly;
+   static sig,tol,siz;
+   if(numframes==0){
+      loadimg(&lx,&ly,img0);
+   }
+   cls(0);
+   showimg(lx,ly,img0,256,0);
+   gkernel(0.01,0.001,siz,gker);
+   moveto(xres-100,yres-15);
+   setcol(0xffffff);printnum(siz);
+   for(i=0;i<(2*siz+1);i++){
+      moveto(xres-100,10+10*i);
+      printnum(gker[i]);
+   }
+}
+loadimg(&lx,&ly,im[1024][1024])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(lx,ly,im[1024][1024],m,s)
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*m+s;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+gkernel(sig,tol,&siz,k[1024])
+{
+   if(sig<0.1){
+      siz=0;
+      k[0]=1;
+      return;
+   }
+   d=sig*sqrt(-2*log(tol*sig*sqrt(2*pi)));
+   siz=ceil(d-0.5);d=siz+0.5;
+   v=1/(sig*sqrt(2*pi));
+   for(i=0;i<(2*siz+1);i++){
+      k[i]=0;
+      for(j=0;j<10;j++){
+         x=i-d+0.1*j+0.05;
+         k[i]+=v*exp(-x*x/(2*sig*sig));
+      }
+      k[i]*=0.1;
+   }
+}

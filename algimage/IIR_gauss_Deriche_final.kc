@@ -1,0 +1,202 @@
+//Ref:"Recursively implementing the gaussian andits derivatives",
+//    rapport de recherche N 1893, INRIA, avril 1993.
+//avec un petit copiage sur Malandain
+enum {imax=1024,kmax=1024};
+static lx,ly;
+//------------------|   a0  |   a1  |   b0 |  b1  |   c0  |   c1  |   w0  |   w1 |
+static param[3][8]={{ 1.68  , 3.735 , 1.783, 1.723,-0.6803,-0.2598, 0.6318, 1.997},
+                    {-0.6472, -4.531, 1.527, 1.516, 0.6494, 0.9557, 0.6719, 2.072},
+                    {-1.331 , 3.661 , 1.24 , 1.314, 0.3225, -1.738, 0.748,  2.166}};
+static nip[4],nim[4],di[4];//approximation du 4e ordre
+()
+{
+   static img0[1024][1024];
+   static img1[1024][1024];
+   static img2[1024][1024];
+   if(numframes==0){
+      loadimg(img0);
+      i=15;
+      DerCalcGFilter(i,0);//sigma=0.20673658 est tres particuliere!!!
+      DerGConvy(img0,img1);
+      DerCalcGFilter(i,2);
+      DerGConvx(img1,img2);
+      DerCalcGFilter(i,0);//sigma=0.20673658 est tres particuliere!!!
+      DerGConvx(img0,img1);
+      DerCalcGFilter(i,2);
+      DerGConvy(img1,img0);
+      
+      addimg(img0,img2,img2);
+      absimg(img2,img2);
+      minmaxsclimg(img2,img2);
+      sclimg(-1,1,img2,img2);
+      
+      cls(255);
+   }
+   
+   showimg(img2);
+}
+DerCalcGFilter(sig,der)
+{
+   der=floor(der);
+   if ((der>2)||(der<0)) return;
+   a0=param[der][0];a1=param[der][1];
+   b0=param[der][2];b1=param[der][3];
+   c0=param[der][4];c1=param[der][5];
+   w0=param[der][6];w1=param[der][7];
+   eb0=exp(-b0/sig);eb1=exp(-b1/sig);
+   ieb0=1/eb0; ieb1=1/eb1;
+   sw0=sin(w0/sig); sw1=sin(w1/sig);
+   cw0=cos(w0/sig); cw1=cos(w1/sig);
+   //Normalisation----------------------------------------------------
+   //On doit pouvoir simplifier un peu plus---------------------------
+   if(der==0){//derivee d'ordre0 (pour frimer!)-----------------------
+      den0 =2*a1*ieb0*cw0*cw0-a0*sw0*ieb0^2+a0*sw0-2*a1*ieb0;
+      den0/=(2*cw0*ieb0-ieb0^2-1)*sw0;
+      den1 =2*c1*ieb1*cw1*cw1-c0*sw1*ieb1^2+c0*sw1-2*c1*ieb1;
+      den1/=(2*cw1*ieb1-ieb1^2-1)*sw1;      
+   }else if(der==1){//derivee premiere--------------------------------
+      den  =ieb0^4-4*cw0*ieb0^3+2*ieb0^2+4*cw0*cw0*ieb0^2+1-4*cw0*ieb0;
+      den0 =-2*(a0*cw0-a1*sw0+a1*sw0*ieb0^2+a0*cw0*ieb0^2-2*a0*ieb0)*ieb0/den;
+      den  =ieb1^4-4*cw1*ieb1^3+2*ieb1^2+4*cw1*cw1*ieb1^2+1-4*cw1*ieb1;
+      den1 =-2*(c0*cw1-c1*sw1+c1*sw1*ieb1^2+c0*cw1*ieb1^2-2*c0*ieb1)*ieb1/den;
+   } else {//derivee seconde------------------------------------------
+      den  =12*cw0*ieb0^3-3*ieb0^2+8*(cw0*ieb0)^3-12*(cw0*ieb0^2)^2-3*ieb0^4;
+      den +=6*cw0*ieb0^5-ieb0^6+6*cw0*ieb0-(1+12*(cw0*ieb0)^2);
+      den0 =4*a0*sw0*ieb0^3+a1*(cw0*ieb0^2)^2-4*a0*sw0*ieb0-6*a1*(cw0*ieb0)^2;
+      den0+=2*a1*cw0*ieb0*(cw0*cw0-1)*(1+ieb0^2)+a1*(cw0*cw0-ieb0^4);
+      den0+=2*a0*sw0*cw0*cw0*ieb0*(1-ieb0^2)-(a0*sw0*cw0*ieb0^4+a1)+6*a1*ieb0^2+a0*cw0*sw0;
+      den0*=ieb0/(den*sw0);
+      den  =12*cw1*ieb1^3-3*ieb1^2+8*(cw1*ieb1)^3-12*(cw1*ieb1^2)^2-3*ieb1^4;
+      den +=6*cw1*ieb1^5-ieb1^6+6*cw1*ieb1-(1+12*(cw1*ieb1)^2);
+      den1 =4*c0*sw1*ieb1^3+c1*(cw1*ieb1^2)^2-4*c0*sw1*ieb1-6*c1*(cw1*ieb1)^2;
+      den1+=2*c1*cw1*ieb1*(cw1*cw1-1)*(1+ieb1^2)+c1*(cw1*cw1-ieb1^4);
+      den1+=2*c0*sw1*cw1*cw1*ieb1*(1-ieb1^2)-(c0*sw1*cw1*ieb1^4+c1)+6*c1*ieb1^2+c0*cw1*sw1;
+      den1*=ieb1/(den*sw1);
+   }
+   den  =1/(den0+den1);
+   a0*=den;a1*=den;c0*=den;c1*=den;
+   //ouf! fini la punition--------------------------------------------
+   
+   nip[0]=a0+c0;
+   nip[1]=eb1*(c1*sw1-(c0+2*a0)*cw1)+eb0*(a1*sw0-(2*c0+a0)*cw0);
+   nip[2]=2*eb0*eb1*((a0+c0)*cw0*cw1-a1*sw0*cw1-c1*cw0*sw1)+c0*eb0^2+a0*eb1^2;
+   nip[3]=eb1*eb0^2*(c1*sw1-c0*cw1)+eb0*eb1^2*(a1*sw0-a0*cw0);
+   di[0] =-2*(eb1*cw1+eb0*cw0);
+   di[1] =4*cw1*cw0*eb0*eb1+eb1^2+eb0^2;
+   di[2] =-2*(cw0*eb0*eb1^2+cw1*eb1*eb0^2);
+   di[3] =(eb0*eb1)^2;
+   si=(-1)^(der);
+   for(i=0;i<3;i++) nim[i]=si*(nip[i+1]-di[i]*nip[0]); nim[3]=-si*di[3]*nip[0];
+}
+DerGConvX(in[imax][imax],out[imax][imax])
+{
+   static buf[imax];
+   for(y=0;y<ly;y++){
+      for(x=0;x<lx;x++){out[y][x]=0;buf[x]=0;}
+      for(x=0;x<4;x++){
+         for(i=0;i<=x;i++){
+            out[y][x]  +=nip[i]*in[y][x-i];
+            buf[lx-x-1]+=nim[i]*in[y][lx-x+i];
+         }
+         for(i=0;i<x;i++){
+            out[y][x]  -=di[i]*out[y][x-i-1];
+            buf[lx-x-1]-=di[i]*buf[lx-x+i]  ;
+         }
+      }
+      for(x=4;x<lx;x++){
+         for(i=0;i<4;i++){
+            out[y][x]  +=nip[i]*in[y][x-i]   -di[i]*out[y][x-i-1];
+            buf[lx-x-1]+=nim[i]*in[y][lx-x+i]-di[i]*buf[lx-x+i]  ;
+         }
+      }
+      for(x=0;x<lx;x++) out[y][x]+=buf[x];
+   }
+}
+DerGConvY(in[imax][imax],out[imax][imax])
+{
+   static buf[imax];
+   for(x=0;x<lx;x++){
+      for(y=0;y<ly;y++){out[y][x]=0;buf[y]=0;}
+            //out[y][0]  =nip[0]*in[y][0];
+      for(y=0;y<4;y++){
+         for(i=0;i<=y;i++){
+            out[y][x]  +=nip[i]*in[y-i][x];
+            buf[ly-y-1]+=nim[i]*in[ly-y+i][x];
+         }
+         for(i=0;i<y;i++){
+            out[y][x]  -=di[i]*out[y-i-1][x];
+            buf[ly-y-1]-=di[i]*buf[ly-y+i]  ;
+         }
+      }
+      for(y=4;y<ly;y++){
+         for(i=0;i<4;i++){
+            out[y][x]  +=nip[i]*in[y-i][x]   -di[i]*out[y-i-1][x];
+            buf[ly-y-1]+=nim[i]*in[ly-y+i][x]-di[i]*buf[ly-y+i]  ;
+         }
+      }
+      for(y=0;y<ly;y++) out[y][x]+=buf[y];
+   }
+}
+DerGConv(in[imax][imax],out[imax][imax])
+{
+   static tmp[imax][imax];
+   DerGConvX(in,tmp);
+   DerGConvY(tmp,out);
+}
+loadimg(im[imax][imax])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   if(lx>imax)lx=imax;if(ly>imax)ly=imax;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(im[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*256;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+diffimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]-in2[y][x];
+}
+addimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]+in2[y][x];
+}
+mulimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]*in2[y][x];
+}
+absimg(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=abs(in[y][x]);
+}
+sclimg(m,s,in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=m*in[y][x]+s;
+}
+minmaxsclimg(in[imax][imax],out[imax][imax])
+{
+   min=1e20;max=-min;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         if (in[y][x]>max) max=in[y][x];
+         if (in[y][x]<min) min=in[y][x];
+      }
+   a=1/(max-min);b=-a*min;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=a*in[y][x]+b;
+}

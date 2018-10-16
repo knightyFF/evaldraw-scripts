@@ -1,0 +1,30 @@
+()
+{
+   static img0[1024][1024];
+   static lx,ly;
+   if(numframes==0){
+      loadimg(&lx,&ly,img0);
+   }
+   cls(0);
+   showimg(lx,ly,img0,256,0);
+}
+loadimg(&lx,&ly,im[1024][1024])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   if(lx>imax)lx=imax;if(ly>imax)ly=imax;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(lx,ly,im[1024][1024],m,s)
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*m+s;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}

@@ -1,0 +1,180 @@
+enum {imax=1024,kmax=1024};
+static lx,ly;
+()
+{
+   static img0[1024][1024];
+   static img1[1024][1024];
+   static img2[1024][1024];
+   static cml[256][256];
+   if(numframes==0){
+      loadimg(img0);
+      siz=2;
+      bconvolve(siz,img0,img1);
+      bconvolve(siz,img1,img0);
+      bconvolve(siz,img0,img1);
+      gradxy(img1,img2);
+      //leveltab(img1,cml);//trop lent!
+      cls(0);
+   }
+   level(mousx/xres,mousy*1/yres,img1,img0);
+   showimg(img0);
+}
+loadimg(im[imax][imax])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   if(lx>imax)lx=imax;if(ly>imax)ly=imax;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(im[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*256;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+diffimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]-in2[y][x];
+}
+addimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]+in2[y][x];
+}
+sclimg(m,s,in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=m*in[y][x]+s;
+}
+gradx(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=1;x<lx-1;x++)out[y][x]=in[y][x+1]-in[y][x-1];
+}
+grady(in[imax][imax],out[imax][imax])
+{
+   for(y=1;y<ly-1;y++)
+      for(x=0;x<lx;x++)out[y][x]=in[y+1][x]-in[y-1][x];
+}
+gradxy(in[imax][imax],out[imax][imax])
+{
+   for(y=1;y<ly-1;y++)
+      for(x=1;x<lx-1;x++)
+         out[y][x]=abs(in[y+1][x]-in[y-1][x])+
+                   abs(in[y][x+1]-in[y][x-1]);
+}
+level(t,dt,in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++)
+         if(abs(in[y][x]-t)<dt) out[y][x]=1;
+         else out[y][x]=0;
+}
+countimg(in[imax][imax])
+{
+   c=0;
+   for(y=0;y<ly;y++)
+      for(x=1;x<lx-1;x++) c+=in[y][x];
+   return c;
+}
+leveltab(in[imax][imax],out[256][256])
+{
+   static im[imax][imax];
+   for(j=0;j<256;j++)
+      for(i=0;i<256;i++){
+         level(i*1/256,j*1/256,in,im);
+         out[j][i]=countimg(im);
+      }
+}
+//Verifier le cas ou siz>=lx: ce serra different!!!
+bconvolvex(siz,in[imax][imax],out[imax][imax])
+{
+   static id[kmax];
+   if(siz<=0.5){
+      sclimg(1,0,in,out);return;
+   }
+   siz-=0.5;
+   siz1=floor(siz);ds=siz-siz1;
+   for(i=0; i<siz;i++) id[i]=1/(siz+1+i);
+   id[i]=1/(2*siz1+1+ds);
+   d=1/(2*siz+1);
+   for(y=0;y<ly;y++){
+      m=0;
+      for(x=-siz1;x<0;x++){
+         m+=in[y][x+siz1];
+      }
+      for(x=0;x<siz1;x++){
+         m+=in[y][x+siz1];
+         out[y][x]=(m+ds*in[y][x+siz1+1])*id[x];
+      }
+         //x=siz1;
+         m+=in[y][x+siz1];
+         out[y][x]=(m+ds*in[y][x+siz1+1])*id[x];
+         m-=in[y][x-siz1];
+      for(x=siz1+1;x<lx-siz1-1;x++){
+         m+=in[y][x+siz1];
+         out[y][x]=(m+ds*(in[y][x+siz1+1]+in[y][x-siz1-1]))*d;
+         m-=in[y][x-siz1];
+      }
+         //x=lx-siz1-1;
+         m+=in[y][x+siz1];
+         out[y][x]=(m+ds*in[y][x-siz1-1])*id[lx-x-1];
+         m-=in[y][x-siz1];
+      for(x=lx-siz1;x<lx;x++){
+         out[y][x]=(m+ds*in[y][x-siz1-1])*id[lx-x-1];
+         m-=in[y][x-siz1];
+      }
+   }
+}
+//Verifier le cas ou siz>=lx: ce serra different!!!
+bconvolvey(siz,in[imax][imax],out[imax][imax])
+{
+   static id[kmax];
+   if(siz<=0.5){
+      sclimg(1,0,in,out);return;
+   }
+   siz-=0.5;
+   siz1=floor(siz);ds=siz-siz1;
+   for(i=0; i<siz;i++) id[i]=1/(siz+1+i);
+   id[i]=1/(2*siz1+1+ds);
+   d=1/(2*siz+1);
+   for(x=0;x<lx;x++){
+      m=0;
+      for(y=-siz1;y<0;y++){
+         m+=in[y+siz1][x];
+      }
+      for(y=0;y<siz1;y++){
+         m+=in[y+siz1][x];
+         out[y][x]=(m+ds*in[y+siz1+1][x])*id[y];
+      }
+         m+=in[y+siz1][x];
+         out[y][x]=(m+ds*in[y+siz1+1][x])*id[y];
+         m-=in[y-siz1][x];
+      for(y=siz1+1;y<ly-siz1-1;y++){
+         m+=in[y+siz1][x];
+         out[y][x]=(m+ds*(in[y+siz1+1][x]+in[y-siz1-1][x]))*d;
+         m-=in[y-siz1][x];
+      }
+         m+=in[y+siz1][x];
+         out[y][x]=(m+ds*in[y-siz1-1][x])*id[ly-y-1];
+         m-=in[y-siz1][x];
+      for(y=ly-siz1;y<ly;y++){
+         out[y][x]=(m+ds*in[y-siz1-1][x])*id[ly-y-1];
+         m-=in[y-siz1][x];
+      }
+   }
+}
+bconvolve(siz,in[imax][imax],out[imax][imax])
+{
+   static img[imax][imax];
+   bconvolvex(siz,in,img);
+   bconvolvey(siz,img,out);
+}

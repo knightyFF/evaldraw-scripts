@@ -1,0 +1,6 @@
+(x) //press F1 for help
+x0=(mousx-xres*0.5)*0.01;
+t0=(mousy-yres*0.5)*0.01;
+if(abs(x-x0)>2*abs(t0)) return 0;
+x=(x-x0)/t0;
+exp(-x^6)

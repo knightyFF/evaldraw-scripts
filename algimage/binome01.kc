@@ -1,0 +1,16 @@
+(x)
+{
+   binome(50,floor(x))*1e-13;
+}
+binome(n,k)
+{
+   if (k>n || k<0) return 0;
+
+    if (k > n/2) k = n-k; // faster
+
+    accum = 1;
+    for (i = 1; i <= k;i++)
+         accum *=(n-k+i)/i;
+
+    return int(accum); // avoid rounding error
+}

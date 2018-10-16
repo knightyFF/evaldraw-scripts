@@ -1,0 +1,71 @@
+enum {imax=1024,kmax=1024};
+static lx,ly;
+()
+{
+   static img0[1024][1024];
+   static img1[1024][1024];
+   static img2[1024][1024];
+   if(numframes==0){
+      loadimg(img0);
+      cls(0);
+   }
+   symim(img0,img1,50,1000000);
+   minmaxsclimg(img1,img2);
+   showimg(img2);
+}
+symim(in[imax][imax],out[imax][imax],d,n)
+{
+   for(i=0;i<n;i++){
+      cx=rnd*(ly-2*d)+d;cy=rnd*(lx-2*d)+d;
+      dx=2*(rnd-0.5)*d;dy=2*(rnd-0.5)*d;
+      v=0.5*abs(in[cx+dx][cy+dy]-in[cx-dx][cy-dy]);
+      out[cx][cy]+=v;
+   }
+}
+loadimg(im[imax][imax])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   if(lx>imax)lx=imax;if(ly>imax)ly=imax;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(im[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*256;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+diffimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]-in2[y][x];
+}
+addimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]+in2[y][x];
+}
+sclimg(m,s,in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=m*in[y][x]+s;
+}
+minmaxsclimg(in[imax][imax],out[imax][imax])
+{
+   min=1e20;max=-min;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         if (in[y][x]>max) max=in[y][x];
+         if (in[y][x]<min) min=in[y][x];
+      }
+   a=1/(max-min);b=-a*min;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=a*in[y][x]+b;
+}

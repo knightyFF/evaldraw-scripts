@@ -1,0 +1,158 @@
+enum {imax=1024,kmax=1024};
+static lx,ly;
+static boxsiz;
+()
+{
+   static img0[imax][imax];
+   static img1[imax][imax];
+   static img2[imax][imax];
+   static gker[kmax];
+   static sig,tol,siz;
+   if(numframes==0){
+      loadimg(img0);
+      gkernel(5,0.001,&siz,gker);
+      convolve(siz,img0,img1,gker);
+      localmin(img1,img2);
+      //gkernel(4,0.001,&siz,gker);
+      //convolve(siz,img0,img2,gker);
+      //diffimg(img0,img1,img2);
+      sclimg(0.5,0,img1,img1);
+      addimg(img1,Img2,img1);
+      cls(0);
+   }
+   
+   showimg(img1);
+   
+   moveto(xres-100,yres-15);
+   setcol(0xffffff);printnum(siz);
+   for(i=0;i<(2*siz+1);i++){
+      moveto(xres-100,10+10*i);
+      printnum(gker[i]);
+   }
+   
+}
+loadimg(im[imax][imax])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(im[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*256;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+diffimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]-in2[y][x];
+}
+addimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]+in2[y][x];
+}
+sclimg(m,s,in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=m*in[y][x]+s;
+}
+gkernel(sig,tol,&siz,k[kmax])
+{
+   if(sig<0.1){
+      siz=0;
+      k[0]=1;
+      return;
+   }
+   d=sig*sqrt(-2*log(tol*sig*sqrt(2*pi)));
+   siz=ceil(d-0.5);d=siz+0.5;
+   v=1/(sig*sqrt(2*pi));
+   for(i=0;i<(2*siz+1);i++){
+      k[i]=0;
+      for(j=0;j<10;j++){
+         x=i-d+0.1*j+0.05;
+         k[i]+=v*exp(-x*x/(2*sig*sig));
+      }
+      k[i]*=0.1;
+   }
+}
+convolvex(siz,in[imax][imax],out[imax][imax],ker[kmax])
+{
+   for(y=0;y<ly;y++){
+      for(x=0;x<siz;x++){
+         m=0;
+         for(i=-x;i<=siz;i++)m+=in[y][x+i]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(x=siz;x<lx-siz;x++){
+         m=0;
+         for(i=-siz;i<=siz;i++)m+=in[y][x+i]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(x=lx-siz;x<lx;x++){
+         m=0;
+         for(i=-siz;i<=(lx-x);i++)m+=in[y][x+i]*ker[i+siz];
+         out[y][x]=m;
+      }
+   }
+}
+convolvey(siz,in[imax][imax],out[imax][imax],ker[kmax])
+{
+   for(x=0;x<lx;x++){
+      for(y=0;y<siz;y++){
+         m=0;
+         for(i=-y;i<=siz;i++)m+=in[y+i][x]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(y=siz;y<ly-siz;y++){
+         m=0;
+         for(i=-siz;i<=siz;i++)m+=in[y+i][x]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(y=ly-siz;y<ly;y++){
+         m=0;
+         for(i=-siz;i<=(ly-y);i++)m+=in[y+i][x]*ker[i+siz];
+         out[y][x]=m;
+      }
+   }
+}
+convolve(siz,in[imax][imax],out[imax][imax],ker[kmax])
+{
+   static img[1024][1024];
+   convolvex(siz,in,img,ker);
+   convolvey(siz,img,out,ker);
+}
+localmax(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         out[y][x]=0;
+         if(in[y][x]>0)
+         if((in[y][x]>in[y][x+1])&&(in[y][x]>in[y][x-1])&&
+            (in[y][x]>in[y+1][x])&&(in[y][x]>in[y-1][x])&&
+            (in[y][x]>in[y+1][x+1])&&(in[y][x]>in[y+1][x-1])&&
+            (in[y][x]>in[y+1][x+1])&&(in[y][x]>in[y-1][x+1])) 
+                out[y][x]=in[y][x];
+      }
+}
+localmin(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         out[y][x]=0;
+         if(in[y][x]>0)
+         if((in[y][x]<in[y][x+1])&&(in[y][x]<in[y][x-1])&&
+            (in[y][x]<in[y+1][x])&&(in[y][x]<in[y-1][x])&&
+            (in[y][x]<in[y+1][x+1])&&(in[y][x]<in[y+1][x-1])&&
+            (in[y][x]<in[y+1][x+1])&&(in[y][x]<in[y-1][x+1])) 
+                out[y][x]=in[y][x];
+      }
+}

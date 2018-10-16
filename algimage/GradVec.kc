@@ -1,0 +1,137 @@
+enum {imax=1024,kmax=1024,grdtmpltsiz=256};
+static lx,ly;
+static grdtmplt[grdtmpltsiz*2+1][grdtmpltsiz*2+1][4];
+()
+{
+   static img0[1024][1024];
+   static img1[1024][1024];
+   static grad[1024][1024][2];
+
+   if(numframes==0){
+      loadimg(img0);
+      CalcGrad(img0,grad);
+      gengrad01();
+      NormalizeGrad(grad,grad);
+      cls(255);
+   }
+   showgrad01(grad);
+   //gengrad01();
+   
+}
+CalcGrad(in[imax][imax],out[imax][imax][2])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         out[y][x][0]=in[y][x+1]-in[y][x-1];
+         out[y][x][1]=in[y+1][x]-in[y-1][x];
+      }
+}
+NormalizeGrad(in[imax][imax][2],out[imax][imax][2])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         m=sqrt(in[y][x][0]*in[y][x][0]+in[y][x][0]*in[y][x][0]);
+         if(m>0.01) m=1/m; else m=0;
+         out[y][x][0]=m*in[y][x][0];
+         out[y][x][1]=m*in[y][x][1];
+      }
+}
+ShowGradSimple(in[imax][imax][2])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=(0.5*in[y][x][0]+0.5)*256;
+         g=(0.5*in[y][x][1]+0.5)*256;
+         setcol(r,g,r);
+         setpix(x,y);
+      }
+}
+Gengrad01()
+{
+   for(y=-grdtmpltsiz;y<=grdtmpltsiz;y++)
+      for(x=-grdtmpltsiz;x<=grdtmpltsiz;x++){
+         mag=sqrt(x*x+y*y)*0.004;ang=atan2(x,y);
+         r=256*sin(ang)^2*mag;
+         g=256*sin(ang+2*pi/3)^2*mag;
+         b=256*sin(ang+4*pi/3)^2*mag;
+         grdtmplt[y+grdtmpltsiz][x+grdtmpltsiz][0]=r;
+         grdtmplt[y+grdtmpltsiz][x+grdtmpltsiz][1]=g;
+         grdtmplt[y+grdtmpltsiz][x+grdtmpltsiz][2]=b;
+         //setcol(r,g,b);setpix(y+grdtmpltsiz,x+grdtmpltsiz);
+      }
+}
+ShowGrad01(in[imax][imax][2])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         gx=(in[y][x][0]*0.7+1)*grdtmpltsiz;
+         gy=(in[y][x][1]*0.7+1)*grdtmpltsiz;
+         r=grdtmplt[gy][gx][0];
+         g=grdtmplt[gy][gx][1];
+         b=grdtmplt[gy][gx][2];
+         setcol(r,g,b);
+         setpix(x,y);
+      }
+}
+loadimg(im[imax][imax])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   if(lx>imax)lx=imax;if(ly>imax)ly=imax;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(im[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*256;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+diffimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]-in2[y][x];
+}
+addimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]+in2[y][x];
+}
+mulimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]*in2[y][x];
+}
+absimg(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=abs(in[y][x]);
+}
+sclimg(m,s,in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=m*in[y][x]+s;
+}
+minmaxsclimg(in[imax][imax],out[imax][imax])
+{
+   min=1e20;max=-min;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         if (in[y][x]>max) max=in[y][x];
+         if (in[y][x]<min) min=in[y][x];
+      }
+   a=1/(max-min);b=-a*min;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=a*in[y][x]+b;
+}
+compImg(m1,img1[imax][imax],m2,img2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=m1*img1[y][x]+m2*img2[y][x];
+}

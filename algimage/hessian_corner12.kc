@@ -1,0 +1,247 @@
+enum {imax=1024,kmax=1024,fmax=65536};
+static lx,ly;
+static ker[kmax];
+static wbox[kmax][kmax];
+static sig,tol,siz;
+()
+{
+   static img0[imax][imax];
+   static img1[imax][imax];
+   static img2[imax][imax];
+   static feat[fmax][3];
+   static k=0;
+   if(numframes==0){
+      loadimg(img0);
+      gkernel(.75,0.001,&siz,ker);
+      convolve(img0,img1);
+      k=Hessian_corner(3.,0.001,0.06,img1,feat);//0.06: 0.04 to 0.15
+      sclimg(0.5,0,img0,img0);
+      cls(0);
+   }
+   
+   showimg(img0);
+   
+   moveto(10,10);
+   setcol(0xffffff);
+   printf("k= %f",k);
+   setcol(0xffff00);
+   showfeat(200,feat);  
+}
+loadimg(im[imax][imax])
+{
+   static r,g,b;
+   getpicsiz(&lx,&ly);
+   if(lx>imax)lx=imax;if(ly>imax)ly=imax;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         pic(x,y,&r,&g,&b);
+         im[y][x]=1/256*(r*0.3+0.55*g+0.15*b);
+      }
+}
+showimg(im[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*256;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+diffimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]-in2[y][x];
+}
+addimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]+in2[y][x];
+}
+mulimg(in1[imax][imax],in2[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in1[y][x]*in2[y][x];
+}
+copyimg(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=in[y][x];
+}
+sclimg(m,s,in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=m*in[y][x]+s;
+}
+absimg(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++) out[y][x]=abs(in[y][x]);
+}
+gkernel(sig,tol,&siz,k[kmax])
+{
+   if(sig<0.1){
+      siz=0;
+      k[0]=1;
+      return;
+   }
+   d=sig*sqrt(-2*log(tol*sig*sqrt(2*pi)));
+   siz=ceil(d-0.5);d=siz+0.5;
+   v=1/(sig*sqrt(2*pi));
+   for(i=0;i<(2*siz+1);i++){
+      k[i]=0;
+      for(j=0;j<10;j++){
+         x=i-d+0.1*j+0.05;
+         k[i]+=v*exp(-x*x/(2*sig*sig));
+      }
+      k[i]*=0.1;
+   }
+}
+convolvex(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++){
+      for(x=0;x<siz;x++){
+         m=0;
+         for(i=-x;i<=siz;i++)m+=in[y][x+i]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(x=siz;x<lx-siz;x++){
+         m=0;
+         for(i=-siz;i<=siz;i++)m+=in[y][x+i]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(x=lx-siz;x<lx;x++){
+         m=0;
+         for(i=-siz;i<=(lx-x);i++)m+=in[y][x+i]*ker[i+siz];
+         out[y][x]=m;
+      }
+   }
+}
+convolvey(in[imax][imax],out[imax][imax])
+{
+   for(x=0;x<lx;x++){
+      for(y=0;y<siz;y++){
+         m=0;
+         for(i=-y;i<=siz;i++)m+=in[y+i][x]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(y=siz;y<ly-siz;y++){
+         m=0;
+         for(i=-siz;i<=siz;i++)m+=in[y+i][x]*ker[i+siz];
+         out[y][x]=m;
+      }
+      for(y=ly-siz;y<ly;y++){
+         m=0;
+         for(i=-siz;i<=(ly-y);i++)m+=in[y+i][x]*ker[i+siz];
+         out[y][x]=m;
+      }
+   }
+}
+convolve(in[imax][imax],out[imax][imax])
+{
+   static img[1024][1024];
+   convolvex(in,img);
+   convolvey(img,out);
+}
+gradx(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++)
+         out[y][x]=in[y][x+1]-in[y][x-1];
+}
+grady(in[imax][imax],out[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++)
+         out[y][x]=in[y+1][x]-in[y-1][x];
+}
+localmax(in[imax][imax],out[imax][imax])
+{
+   k=0;
+   d=0;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         out[y][x]=0;
+         if(in[y][x]>0)
+         if((in[y][x]>in[y][x+1]+d)&&(in[y][x]>in[y][x-1]+d)&&
+            (in[y][x]>in[y+1][x]+d)&&(in[y][x]>in[y-1][x]+d)&&
+            (in[y][x]>in[y+1][x+1]+d)&&(in[y][x]>in[y+1][x-1]+d)&&
+            (in[y][x]>in[y+1][x+1]+d)&&(in[y][x]>in[y-1][x+1]+d)){ 
+                out[y][x]=in[y][x];
+                k++;
+         } 
+      }
+   k;
+}
+quicksort(a[fmax][3],i0,i1)// adapted from sorttest.kc
+{
+   if (i1-i0 <= 1) return;
+   v0 = a[i0][2]; v1 = a[i0+1][2]; v2 = a[i1-1][2]; //v = median of 3 elements
+          i = min(v0,v1); if (v2 < i) v = i;
+   else { i = v0+v1-i;    if (v2 > i) v = i;
+   else                               v = v2; }
+
+   j0 = i0; j1 = i1;
+   for(i=i0;i<j1;i++)
+   {
+      if (a[i][2] > v){
+         t = a[j0][0]; a[j0][0] = a[i][0]; a[i][0] = t;
+         t = a[j0][1]; a[j0][1] = a[i][1]; a[i][1] = t;
+         t = a[j0][2]; a[j0][2] = a[i][2]; a[i][2] = t; 
+         j0++; 
+      }
+      else if (a[i][2] < v){
+         j1--; 
+         t = a[j1][0]; a[j1][0] = a[i][0]; a[i][0] = t;
+         t = a[j1][1]; a[j1][1] = a[i][1]; a[i][1] = t;
+         t = a[j1][2]; a[j1][2] = a[i][2]; a[i][2] = t; 
+         i--;
+      }
+   }
+   quicksort(a,i0,j0);
+   quicksort(a,j1,i1);
+}
+grabfeat(in[imax][imax],out[fmax][3])
+{
+   k=0;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++)
+         if(in[y][x]){
+            out[k][0]=x;out[k][1]=y;out[k][2]=in[y][x];
+            k++;
+         }
+   k;
+}
+Hessian_corner(s,t,k,in[imax][imax],feat[fmax][3])
+{
+   static gx[imax][imax],gy[imax][imax],gg[imax][imax];
+   static tmp[imax][imax],tmp2[imax][imax];
+   
+   gkernel(s,t,&siz,ker);
+   convolve(in,tmp);
+   
+   gradx(tmp,gx);grady(tmp,gy);
+   grady(gx,gg);
+   copyimg(gx,tmp);gradx(tmp,gx);
+   copyimg(gy,tmp);grady(tmp,gy);
+   
+   s*=s;
+   for(y=siz;y<(ly-siz);y++)
+      for(x=siz;x<(lx-siz);x++){
+         m00=gx[y][x];m01=gg[y][x];m11=gy[y][x];
+         det=s*(m00*m11-m01*m01);
+         tmp[y][x]=-det;
+      }
+   localmax(tmp,tmp2);
+   k=grabfeat(tmp2,feat);
+   quicksort(out,0,k);
+   k;
+}
+showfeat(k,feat[fmax][3])
+{
+   //setcol(0xffffff);
+   for(i=0;i<k;i++){
+      //k1=1/k;
+      //setcol(255*(k-i)*k1,255*(k-i)*k1,255*i*k1);
+      setpix(feat[i][0],feat[i][1]);
+   }
+}
