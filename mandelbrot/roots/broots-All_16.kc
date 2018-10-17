@@ -1,0 +1,544 @@
+/*---Header-------------------------------------------------------------------
+
+-DISCLAMER: This is provided in an as is basis: No warranty of any kind ;o)---
+
+-LICENCE: Public domain.
+
+-DATE:05-24-2013. last update: 05-29-2013.
+
+-DESCRIPTION: 
+ Mandelbrot polynomial zeros finder. by Nait-Merzouk Abdelaziz, A.K.A. Knighty.
+ This script finds the roots of the nth iterate of the mandelbrot polynomial:
+ f_c(z)=z^2+c.
+ This is achieved by using a divide and conquere algorithms and some kind of
+interval arithmetics. Ok! one can use regular IA to do the job but the
+approximation (EDIT it is not an approximation :P) I use just do the job (EDIT: forget about the following statment :o)) even if it is slightly err... inexact.
+ Result for 21 iterations --> 2^20 roots --> 1048576 roots in approximately 20mn. (and about 1 hour on a very old Pentium 4)
+ A standalone application with multithreading should be much faster.
+
+-USAGE:
+ *Download evaldraw at http://advsys.net/ken/download.htm.
+ *Launch evaldraw.
+ *Press ESC key and choose File->load. (Or Ctrl-l)
+ *Load this script.
+ *Press F2 to display the script window.
+ *Change the value of MAX_ITERATIONS_NUMBER to the number of iterations you want.
+  Caution: This won't work for more than 21 or 22 iteration. I don't know what 
+  would happen.
+ *Wait. The dots are just to say that it's still working. BTW, evaldraw suspends
+  computations while it's window is in backgroud or when minimized. It's a bit
+  annoying, but you need to let it in the forground in order to it finish the work.
+  You can change this behaviour by editing evaldraw.ini : Change the alwaysactive
+  variable to 1.
+ *When done, the eleapsed time, the number of roots found and the fiew first ones
+  are displayed.
+ *Press F6 and choose a filename and locations to store the results.
+ *Done. 
+ 
+-TODO:
+ *Not necessary: Try regular IA.
+ *Done:Add a refine stage using Newton method: 1 or 2 iterations would be enough.
+ *Done (there is a bug in Rscript compiler that's at the origin of the problem) Improve the subdivision method: If done carfully, one can improve the attainable precision.
+ *Done: One can easily modify this script to get the roots from 0 to maxiter in one run.
+ *Of course, complex rootes always come in conjugate pairs. One can take
+  advantage of this fact in order to reduce computation time. 
+------------------------------------------------------------------Header end*/
+
+//Some constants and arrays
+#define MAX_ITERATIONS_NUMBER 10 //should be between 1 and 12
+#define MIN_SIZE 0.00001
+enum {maxstack=2^22, solTabSiz=2^20};
+static eps=2^-(2*MAX_ITERATIONS_NUMBER-2);
+static stack[maxstack][4];//the stack: Yes it's size is just too exagerated :P.
+static sol[solTabSiz][4];//Array to store the roots.
+static coef[solTabSiz][10][2];//Array to store the taylor expansions of the mapping w->c and w->z.1st index: c or z. last one real and imag components.
+static stackIndex=0, solindex=0;//indices in the stacks and roots array.
+
+static klc=0;//for computing the time it takes.
+
+static mag=4000;
+static centerx=-0.12, centery=1.;
+
+(){//main()
+   if(numframes==0){//1st frame: do the computations and store them
+      cls(0);
+      setcol(0xffffff); moveto(0,0);
+      klc=klock();
+      printf("Computing roots.\n");
+      solve(MAX_ITERATIONS_NUMBER);//The argument is the number of iterations
+      solindex=clean(0,solindex);//Clean the results from solve()
+      quicksortC (0,solindex,2);
+      klc=klock()-klc;
+      printf("Computing hyperbolic components with approximate size>%2.6f.\n",MIN_SIZE);
+      for(i=0; i<solindex; i++) CompCoef(i,0.5);
+   }
+//at eache frame, print some statistics and the roots found.
+//Press F6 to store them in a text file.
+   setcol(0xffffff);
+   moveto(0,0);
+   cls(0);
+#if 0
+   printf("\nDone. Press F6 to save the result.\n"); 
+   fprintf("Iterations:\t%4.0f.\ntime:\t%14.2f s.\nNumber of Hyperbolic components with approximate size > %2.10f found:\t%10.0f.\n\n",MAX_ITERATIONS_NUMBER,klc,MIN_SIZE,solindex);
+   fprintf("Period\tSize\tC0r\tC0i\tC1r\tC1i\tC2r\tC2i\tC3r\tC3i\tC4r\tC4i\tC5r\tC5i\tC6r\tC6i\tC7r\tC7i\tC8r\tC8i\tC9r\tC9i\tC10r\tC10i\n");
+   for(i=0;i<solindex;i++) {
+      fprintf("%2.f\t%2.16f\t%+2.16f\t%+2.16f",sol[i][2],sol[i][3],sol[i][0],sol[i][1]);
+      for(j=0; j<10; j++) fprintf("\t%+2.12f\t%+2.12f",coef[i][j][0],coef[i][j][1]);
+      fprintf("\n");
+   }
+#else
+   Drawthem();
+   setcol(0xff0000);
+   //for(i=0;i<solindex;i++) DrawHCOld(i,0.5);
+   //for(i=0;i<10;i++) fprintf("%+2.16f\t%+2.16f\n",coef[0][1][i][0],coef[0][1][i][1]);
+   for(i=0;i<solindex;i++) DrawHC(i,1.);
+   setcol(0x00ff00);
+   //for(i=0;i<solindex;i++) DrawDE(i);
+#endif
+}
+//----------------------------------------------------------------------------------------------
+//Compute coefficients of Taylor expansion of the maps from w to c and z
+//
+//Compute array of maps w->c and z for |w|=r
+#define COEF_COMP_NBRPT 50
+Carrays(ind,r,Tabz[COEF_COMP_NBRPT][2]){
+   cr=sol[ind][0]; ci=sol[ind][1]; n=sol[ind][2];//Grab info
+   zr=0; zi=0;
+   cr0=cr;ci0=ci;zr0=zr;zi0=zi;
+   //ang=0;
+   for(i=0; i<COEF_COMP_NBRPT;i++){
+      ang=2*pi*i/COEF_COMP_NBRPT;
+      wr=r*cos(ang); wi=r*sin(ang);
+      NSolve(n,wr,wi,zr0,zi0,cr0,ci0,zr,zi,cr,ci);
+      Tabz[i][0]=cr; Tabz[i][1]=ci;
+   }
+}
+//
+//Compute the coefficients
+CompCoef(ind,r){
+   auto Tabz[COEF_COMP_NBRPT][2];
+   //r=min(0.75, max(0.1,r));//r should be around 0.5
+   Carrays(ind,r,Tabz);
+   k=1/COEF_COMP_NBRPT;
+   for(n=0;n<10;n++){
+      k/=r; ang=0;
+      acr=0;aci=0;
+      azr=0;azi=0;
+      for(j=0;j<COEF_COMP_NBRPT;j++){
+         ang=-2*pi*j*(n+1)*1/COEF_COMP_NBRPT;
+         er=cos(ang); ei=sin(ang);
+         cr=Tabz[j][0]; ci=Tabz[j][1];
+         acr+=cr*er-ci*ei; aci+=cr*ei+ci*er;
+      }
+      acr*=k; aci*=k;
+      coef[ind][n][0]=acr; coef[ind][n][1]=aci;
+   }
+}
+//
+evalpoly(ind,x,y,&cx,&cy){
+   cx=sol[ind][0]; cy=sol[ind][1];
+   zx=1; zy=0;
+   for(i=0;i<8;i++){
+      zx1=zx*x-zy*y;
+      zy=zx*y+zy*x; zx=zx1;
+      ccx=coef[ind][i][0]; ccy=coef[ind][i][1];
+      cx+=ccx*zx-ccy*zy; cy+=ccx*zy+ccy*zx;
+   }
+}
+DrawDE(ind){
+   x=sol[ind][0]; y=sol[ind][1]; DE=sol[ind][3];
+   drawsph(mag*(x-centerx)+0.5*xres,0.5*yres-mag*(y-centery),-DE*mag);
+}
+DrawHC(ind,r){
+   auto x,y;
+   ang=0;
+   evalpoly(ind,r*cos(ang),r*sin(ang),x,y);
+   moveto(mag*(x-centerx)+0.5*xres,0.5*yres-mag*(y-centery));
+   for(i=0;i<100;i++){
+      ang+=2*pi/100;
+      evalpoly(ind,r*cos(ang),r*sin(ang),x,y);
+      lineto(mag*(x-centerx)+0.5*xres,0.5*yres-mag*(y-centery));
+   }
+}
+//----------------------------------------------------------------------------------------------
+//Compute z and c for some w and n given approximation z0,c0
+//Uses Newton algorithm to solve the equations system:
+// F(n,z,c)-z=0
+// Fz(n,z,c)-w=0
+//Fz is the derivative of F wrt z
+//The Jacobian of that system is:
+//[Fz-1 Fc ]
+//[Fzz  Fzc]
+//The inverse Jacobian is:
+//[Fzc   -Fc ]*1/((Fz-1)*Fzc-Fc*Fzz)
+//[-Fzz  Fz-1]
+// Formulas:
+//  F(0,z,c)=z
+//  F(n+1,z,c)=F(n,z,c)^2+c
+//  Fz(0,z,c)=1
+//  Fz(n+1,z,c)=2*F(n,z,c)*Fz(n,z,c)
+//  Fc(0,z,c)=0
+//  Fc(n+1,z,c)=2*F(n,z,c)*Fc(n,z,c)+1
+//  Fzz(0,z,c)=0
+//  Fzz(n+1,z,c)=2*(Fz(n,z,c)^2+F(n,z,c)*Fzz(n,z,c)
+//  Fzc(0,z,c)=0
+//  Fzc(n+1,z,c)=2*(Fz(n,z,c)*Fc(n,z,c)+F(n,z,c)*Fzc(n,z,c)
+//
+//Get F(n,z,c) and its derivatives
+Miterate(n,zr,zi,cr,ci,&Fr,&Fi,&Fzr,&Fzi,&Fcr,&Fci,&Fzzr,&Fzzi,&Fzcr,&Fzci){
+   Fr=zr;Fi=zi;
+   Fzr=1;Fzi=0;
+   Fcr=0;Fci=0;
+   Fzzr=1;Fzzi=0;
+   Fzcr=0;Fzci=0;
+   for(i=0;i<n;i++){
+      Fzcr1=2*(Fzr*Fcr-Fzi*Fci+Fr*Fzcr-Fi*Fzci);
+      Fzci=2*(Fzi*Fcr+Fzr*Fci+Fi*Fzcr+Fr*Fzci); Fzcr=Fzcr1;
+      
+      Fzzr1=2*(Fzr^2-Fzi^2+Fr*Fzzr-Fi*Fzzi);
+      Fzzi=2*(2*Fzr*Fzi+Fi*Fzzr+Fr*Fzzi); Fzzr=Fzzr1;
+      
+      Fcr1=2*(Fr*Fcr-Fi*Fci)+1;
+      Fci=2*(Fi*Fcr+Fr*Fci); Fcr=Fcr1;
+      
+      Fzr1=2*(Fr*Fzr-Fi*Fzi);
+      Fzi=2*(Fi*Fzr+Fr*Fzi); Fzr=Fzr1;
+      
+      Fr1=Fr^2-Fi^2+cr;
+      Fi=2*Fr*Fi+ci; Fr=Fr1;
+   }
+   
+}
+//Get interior DE
+GetDE(cr,ci,n){
+   auto Fr,Fi,Fzr,Fzi,Fcr,Fci,Fzzr,Fzzi,Fzcr,Fzci;
+   zr=0; zi=0;
+   Miterate(n,zr,zi,cr,ci,Fr,Fi,Fzr,Fzi,Fcr,Fci,Fzzr,Fzzi,Fzcr,Fzci);
+   //Compute Determinant of Jacobian
+   DJr=Fzcr+(Fcr*Fzzr-Fci*Fzzi);
+   DJi=Fzci+(Fci*Fzzr+Fcr*Fzzi);
+      
+   1/sqrt(DJr^2+DJi^2)
+}
+//Given n and w, and approximations z0 and c0, get z and c
+NSolve(n,wr,wi,z0r,z0i,c0r,c0i,&zr,&zi,&cr,&ci){
+   auto Fr,Fi,Fzr,Fzi,Fcr,Fci,Fzzr,Fzzi,Fzcr,Fzci;
+   zr=z0r; zi=z0i;
+   cr=c0r; ci=c0i;
+   k=0;
+   do{
+      Miterate(n,zr,zi,cr,ci,Fr,Fi,Fzr,Fzi,Fcr,Fci,Fzzr,Fzzi,Fzcr,Fzci);
+      //Compute Determinant of Jacobian
+      DJr=(Fzr-1)*Fzcr-Fzi*Fzci-(Fcr*Fzzr-Fci*Fzzi);
+      DJi=Fzi*Fzcr+(Fzr-1)*Fzci-(Fci*Fzzr+Fcr*Fzzi);
+      
+      //Invert it
+      DJ=1/(DJr^2+DJi^2);
+      DJr*=DJ;
+      DJi*=-DJ;
+      
+      //Compute inverse jacobian
+      J00r=Fzcr; J00i=Fzci;  J01r=-Fcr; J01i=-Fci; 
+      J10r=-Fzzr; J10i=-Fzzi;  J11r=Fzr-1; J11i=Fzi; 
+      
+      //
+      Fr-=zr; Fi-=zi;
+      Fzr-=wr; Fzi-=wi;
+      //Compute Delta
+      Dzr=(J00r*Fr-J00i*Fi)+(J01r*Fzr-J01i*Fzi);
+      Dzi=(J00i*Fr+J00r*Fi)+(J01i*Fzr+J01r*Fzi);
+      
+      Dcr=(J10r*Fr-J10i*Fi)+(J11r*Fzr-J11i*Fzi);
+      Dci=(J10i*Fr+J10r*Fi)+(J11i*Fzr+J11r*Fzi);
+      
+      Dzr1=Dzr*DJr-Dzi*DJi;
+      Dzi=Dzi*DJr+Dzr*DJi; Dzr=Dzr1;
+      
+      Dcr1=Dcr*DJr-Dci*DJi;
+      Dci=Dci*DJr+Dcr*DJi; Dcr=Dcr1;
+      
+      //next iterate
+      dampf=1.;
+      zr-=dampf*Dzr; zi-=dampf*Dzi;
+      cr-=dampf*Dcr; ci-=dampf*Dci;
+      
+      //If Delta too small we are done
+      if(max(max(abs(Dcr),abs(Dci)),max(abs(Dzr),abs(Dzi)))/max(max(abs(cr),abs(ci)),max(abs(zr),abs(zi)))<2^-54) break;
+      //
+      k++;
+   } while (k<10);
+}
+//----------------------------------------------------------------------------------------------
+//Stack functions
+push(x,y,hw){
+   if(stackIndex<maxstack){
+      stack[stackIndex][0]=x;
+      stack[stackIndex][1]=y;
+      stack[stackIndex][2]=hw;
+      stackIndex+=1;
+      return 1;
+   }
+   0//else error!
+}
+pop(&x,&y,&hw){
+   if(stackIndex>0){
+      stackIndex-=1;
+      x=stack[stackIndex][0];
+      y=stack[stackIndex][1];
+      hw=stack[stackIndex][2];
+      return 1;
+   }
+   0//else error!
+}
+//----------------------------------------------------------------------------------------------
+//function to store the roots
+store(x,y,hw,DE){
+#if 1
+   if(solindex>0){//check if the current root found is the same as the previous root
+      ax=sol[solindex-1][0];
+      ay=sol[solindex-1][1];
+      //ahw=sol[solindex-1][2];
+      if(max(abs(ax-x),abs(ay-y))/max(abs(x),abs(y))<=2^-54) return 2;
+   }
+#endif
+   if(solindex<solTabSiz){
+      sol[solindex][0]=x;
+      sol[solindex][1]=y;
+      sol[solindex][2]=hw;
+      sol[solindex][3]=DE;
+      solindex+=1;
+      return 1;
+   }
+   0//else error!
+}
+//----------------------------------------------------------------------------------------------
+//divide function: divides the current square area into n x n areas.
+//This could be done more carefully in order to avoid the "drift" of the
+//centers of the subdivided areas because of rounding errors.
+//Thats why I use epsmult in the previous function and in the clean() function.
+subdiv(x,y,hw,n,maxiter){
+   hwn=hw/n;
+   for(j=0;j<n;j++){
+      yn=y-hwn*(n-2*j-1);
+      for(i=0;i<n;i++){
+         xn=x-hwn*(n-2*i-1);
+         r=mandel(xn,yn,maxiter,hwn*1.5);//Any root in the area?
+         if(r) push(xn,yn,hwn);
+      }
+   }
+}
+//----------------------------------------------------------------------------------------------
+solve(maxiter){//The core
+   //1st subdivision is fine
+   push(0,0,2);//push(1,1,1);//subdiv(0,0,2,2,maxiter);//here the first area is centerd at 0,0 and is 4 units wide.
+   auto x,y,hw;
+   i=0;j=0;
+   while(pop(x,y,hw)){
+      if(hw<0.5*eps){
+         maxit=mandel(x,y,maxiter,hw*1.5); 
+         {
+            Newton(x,y,maxit);
+            DE=GetDE(x,y,maxit);
+            if(DE>MIN_SIZE)
+               store(x,y,maxit,DE);
+         }
+      }
+      else subdiv(x,y,hw,2,maxiter);
+      i++;
+      //just to be sure it's still working
+      if(i==200000){printf(".");i=0;j++;}
+      if(j==80){printf("\n");j=0;}
+      if(solindex==solTabSiz){//shouldn't happen.
+         printf("Cleaning!");
+         //Refinethem(maxiter);
+         solindex1=clean(0,solindex);
+         if(solindex==solindex1) return;
+         solindex=solindex1;
+      }
+   }
+}
+//----------------------------------------------------------------------------------------------
+//return if there is a root for iterations "0 to maxiter" in the disc centered at cx,cy and radius rr0
+//In principle it's enougth to verify only for "maxiter" but because my IA is not perfect there might be
+//some missed roots. This seems to be caused by a "shadowing" phenomenon: the roots for maxiter-1 are usually close of
+//those for maxiter.
+mandel1(cx,cy,maxiter,rr0){//Uses "1st order" RAA
+   x=cx;y=cy;
+   r2=x*x+y*y;
+   r=sqrt(r2);
+   rr1=rr0;
+   
+   i=maxiter-1;
+   if(r<rr1) return maxiter-i;
+   while(i>0 && r-rr1<2){
+      
+      rr1=rr0+(2*r+rr1)*rr1;//rr1 is the radius of the "interval" around current z.
+      
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;
+      i--;
+            
+      r2=x*x+y*y;
+      r=sqrt(r2);
+      if(r-rr1<0) return maxiter-i;
+   }
+   0
+}
+
+mandel(cx,cy,maxiter,rr0){//Uses "2nd order" RAA
+   x=cx;y=cy;
+   r=sqrt(x*x+y*y);
+   dx=1; dy=0; dr=1;
+   h=0;
+   rr2=(dr+h*rr0)*rr0;
+   rr1=rr0;
+   i=maxiter-1;
+   if(r-rr2<=0) return maxiter-i;
+   while(i>0 && r-rr2<2){
+      
+      rr1=rr0+2*r*rr1+(rr1)^2;
+      h=dr^2+(2*r+(2*dr+h*rr0)*rr0)*h;
+      
+      dxx=2*(dx*x-dy*y)+1;
+      dy=2*(dx*y+dy*x);dx=dxx;
+      
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;
+      i--;
+
+      r=sqrt(x*x+y*y);
+      dr=sqrt(dx^2+dy^2);
+      rr2=(dr+h*rr0)*rr0;
+      if(r-rr2<=0) return maxiter-i;
+   }
+   
+   
+   0
+}
+//----------------------------------------------------------------------------------------------
+//Clean the results because the solve function may report a root up to 4 times (in principle, it could be more)
+//Should be a K-NN like algo. This one just works.
+clean(i0,i1){
+   quicksortc(i0,i1,0);
+   i=i0;j=i0+1;
+   while(j<i1){
+      if(max(abs(sol[j][0]-sol[i][0]),abs(sol[j][1]-sol[i][1]))<eps) j++;
+      else {
+         i++;
+         sol[i][0]=sol[j][0];
+         sol[i][1]=sol[j][1];
+         sol[i][2]=sol[j][2];
+         sol[i][3]=sol[j][3];
+         j++;
+      }
+   }
+   i1=i+1;
+   quicksortc(i0,i1,1);
+   i=i0;j=i0+1;
+   while(j<i1){
+      if(max(abs(sol[j][0]-sol[i][0]),abs(sol[j][1]-sol[i][1]))<eps) j++;
+      else {
+         i++;
+         sol[i][0]=sol[j][0];
+         sol[i][1]=sol[j][1];
+         sol[i][2]=sol[j][2];
+         sol[i][3]=sol[j][3];
+         j++;
+      }
+   }
+   i1=i+1;
+}
+
+quicksortC (i0,i1,c)
+{
+   if (i1-i0 <= 1) return;
+   v0 = sol[i0][c]; v1 = sol[i0+1][c]; v2 = sol[i1-1][c]; //v = median of 3 elements
+          i = min(v0,v1); if (v2 < i) v = i;
+   else { i = v0+v1-i;    if (v2 > i) v = i;
+   else                               v = v2; }
+
+   j0 = i0; j1 = i1;
+   for(i=i0;i<j1;i++)
+   {
+      if (sol[i][c] > v) {
+         j1--;
+         t = sol[j1][0]; sol[j1][0] = sol[i][0]; sol[i][0] = t;
+         t = sol[j1][1]; sol[j1][1] = sol[i][1]; sol[i][1] = t;
+         t = sol[j1][2]; sol[j1][2] = sol[i][2]; sol[i][2] = t;
+         t = sol[j1][3]; sol[j1][3] = sol[i][3]; sol[i][3] = t;
+         i--;
+      }
+      else if (sol[i][c] < v) {
+         t = sol[j0][0]; sol[j0][0] = sol[i][0]; sol[i][0] = t;
+         t = sol[j0][1]; sol[j0][1] = sol[i][1]; sol[i][1] = t;
+         t = sol[j0][2]; sol[j0][2] = sol[i][2]; sol[i][2] = t;
+         t = sol[j0][3]; sol[j0][3] = sol[i][3]; sol[i][3] = t;
+         j0++;
+      }
+   }
+   quicksortc(i0,j0,c);
+   quicksortc(j1,i1,c);
+}
+//----------------------------------------------------------------------------------------------
+Drawthem(){
+   for(i=0;i<solindex;i++){
+      x=sol[i][0]; y=sol[i][1];
+      setpix(mag*(x-centerx)+0.5*xres,0.5*yres-mag*(y-centery));
+   }
+}
+DrawHCOld(ind,r){
+   cr=sol[ind][0]; ci=sol[ind][1]; n=sol[ind][2];
+   zr=0; zi=0;
+   cr0=cr;ci0=ci;zr0=zr;zi0=zi;
+   ang=0;
+   wr=r*cos(ang); wi=r*sin(ang);
+   NSolve(n,wr,wi,zr0,zi0,cr0,ci0,zr,zi,cr,ci);
+   moveto(mag*(cr-centerx)+0.5*xres,0.5*yres-mag*(ci-centery));
+   //moveto(mag*(zr-centerx)+0.5*xres,0.5*yres-mag*(zi-centery));
+   ns=100;
+   for(i=0; i<ns;i++){
+      ang+=2*pi/ns;
+      wr=r*cos(ang); wi=r*sin(ang);
+      NSolve(n,wr,wi,zr0,zi0,cr0,ci0,zr,zi,cr,ci);
+      lineto(mag*(cr-centerx)+0.5*xres,0.5*yres-mag*(ci-centery));
+      //lineto(mag*(zr-centerx)+0.5*xres,0.5*yres-mag*(zi-centery));
+   }
+}
+//----------------------------------------------------------------------------------------------
+mandelN(cx,cy,maxiter,&x,&y,&dx,&dy){
+   x=cx;y=cy;
+   dx=1;dy=0;
+   r2=x*x+y*y;
+   i=maxiter-1;
+   while(i>0 && r2<4){
+      
+      dxx=2*(dx*x-dy*y)+1;
+      dy=2*(dx*y+dy*x);dx=dxx;
+      
+      xx=x*x-y*y+cx;
+      y=2*x*y+cy;
+      x=xx;
+      i--;
+            
+      r2=x*x+y*y;
+   }
+   0
+}
+Newton(&cx,&cy,maxiter){
+// Note that the magnitude of the derivatives are very big so a little 
+//error on the roots gives a rather big error on the evaluation of the polynomial
+   auto x,y,dx,dy;
+   for(i=0;i<10;i++){//5 iteration is far more than enougth!
+      
+      mandelN(cx,cy,maxiter,x,y,dx,dy);
+      idr2=1/(dx^2+dy^2);
+      xx=x*dx+y*dy;
+      y=dx*y-x*dy;
+      x=xx*idr2; y=y*idr2;
+      cx-=x; cy-=y;
+      if(sqrt((x*x+y*y)/(cx*cx+cy*cy))<2^-54) break;
+   }
+}
+//----------------------------------------------------------------------------------------------
