@@ -1,0 +1,32 @@
+(x,y){
+   static mx,my,mr;
+   static frm=-1;
+   if(frm<numframes){
+      frm=numframes;
+      mx=(mousx-0.5*xres)*0.01;
+      my=(0.5*yres-mousy)*0.01;
+      mr=iter(mx,my,0);
+   }
+   if((x-mx)^2+(y-my)^2<mr^2) return 0;//draws a disc showing the dist fied value at the point given by mouse cursor
+   iter(x,y,0)^0.25// the power is just for better contrast
+}
+
+#define ANG 45*PI/180
+#define SCL sqrt(2) //must be >1 . small values -> more interesting but slowww! larger values -> faster but dullll!
+static rx=SCL*cos(ANG);
+static ry=SCL*sin(ANG);//rot
+static tx=1.,ty=0.;//translation part
+static mi=20;//max iterations. It's may seem strange but this is not the parameter that usually slows down the most the process.
+static bvr=1/(SCL-1)-0.6;//bonding volume radius of the fractal. here it is deduced from the scale (SCL). shoud be as small as possible. if the too small the DE will be (slightly) too large
+#define BOV 2
+static bailout=(BOV/(SCL-1)-0.6)^2;//(BOV times bvr squared). larger values give smoother (and more accurate) DE but much more slow!
+
+iter(x,y,n){
+   if(n==mi || x*x+y*y>bailout){
+      r=sqrt(x*x+y*y);
+      return (r-bvr)/SCL^n;
+   }
+   x0=x*rx-y*ry; y0=x*ry+y*rx;
+   return min(iter(x0-1,y0,n+1),
+              iter(x0+1,y0,n+1));
+}

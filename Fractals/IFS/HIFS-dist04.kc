@@ -1,0 +1,108 @@
+(x,y,t){
+   static binit=1;
+   if(binit){
+      //binit=0;
+      settrns(0,-0.4,0.25,0.2*t*0.5*pi,2);
+      settrns(1, 0.4,0.25,0.2*t*0.5*pi,2);
+      settrns(2, 0+0.1,   1+0.0,0.5,1.7);
+   }
+   //rect(x,y,1,1)
+   deifs(x,y)^0.25
+}
+static recta=0.62,rectb=0.15;
+rect(x,y,a,b){
+   x=abs(x)-a;y=abs(y)-b;
+   if(min(x,y)>0 && max(x,y)>0) return sqrt(x*x+y*y);
+   max(x,y)
+}
+enum {Ntrns=2};
+enum {tcx=0,tcy=1,trr=2,tir=3,tis=4};
+static trns[Ntrns][8];
+settrns(i,scx,scy,sa,ss){
+   if(i>=Ntrns) return;
+   trns[i][tcx]=scx;
+   trns[i][tcy]=scy;
+   trns[i][trr]=ss*cos(sa);
+   trns[i][tir]=ss*sin(sa);
+   trns[i][tis]=abs(1/ss);
+}
+enum {Npq=256};
+//enum {cx=0,cy=1,cs=2,cd=3};
+deifs(x,y){
+   maxdepth=5;
+   //priority queu
+   auto pqx[Npq];//x
+   auto pqy[Npq];//y
+   auto pqs[Npq];//1/accumulated_scale
+   auto pqd[Npq];//distance
+   auto pqh[Npq];//depth
+   stptr=0;//pointer in the priority queu
+   bvr=1.2;//bounding volume (a disc centered at 0,0 for now) radius
+   bvrm=100;//bailout. it controls the smoothness of the DE field (lower values faster, higher values smoother)
+   mm=0;//to compute mean movement number in the priority queu
+   {//first instance
+      pqx[stptr]=x; pqy[stptr]=y;
+      pqs[stptr]=1; pqd[stptr]=sqrt(x*x+y*y)-bvr;
+      pqh[stptr]=0;
+      stptr++;
+   }
+   bNoExit=(x*x+y*y<bvrm*bvr*bvr);i=0;ii=0;
+   while(bNoExit && i<100){
+      //extract nearest element
+      {
+         depth=pqh[stptr-1];
+         if(depth>maxdepth+1) break;
+         stptr--;
+         if(depth>maxdepth) if(stptr==0) break; else continue;
+         x=pqx[stptr]; y=pqy[stptr];s=pqs[stptr];ad=pqd[stptr];
+      }
+      //generate and insert its children
+      for(j=0;j<Ntrns;j++){
+         //generate child j
+         pqx[stptr]=(x-trns[j][tcx])*trns[j][trr]-(y-trns[j][tcy])*trns[j][tir]+trns[j][tcx];
+         pqy[stptr]=(x-trns[j][tcx])*trns[j][tir]+(y-trns[j][tcy])*trns[j][trr]+trns[j][tcy];
+         pqs[stptr]=s*trns[j][tis];
+         pqd[stptr]=(sqrt((pqx[stptr])^2+(pqy[stptr])^2)-bvr)*pqs[stptr];
+         pqd[stptr]=max(ad,pqd[stptr]);//this removes discontinuities when the bounding volume doesn't cover it's images
+         pqh[stptr]=depth+1;
+         
+         //insert it at its place in the priority queue
+         ptr=stptr;
+         imm=0;
+         while(ptr>0){
+            if(pqd[ptr]>pqd[ptr-1]){//swap
+               k=pqx[ptr]; pqx[ptr]=pqx[ptr-1]; pqx[ptr-1]=k;
+               k=pqy[ptr]; pqy[ptr]=pqy[ptr-1]; pqy[ptr-1]=k;
+               k=pqs[ptr]; pqs[ptr]=pqs[ptr-1]; pqs[ptr-1]=k;
+               k=pqd[ptr]; pqd[ptr]=pqd[ptr-1]; pqd[ptr-1]=k;
+               k=pqh[ptr]; pqh[ptr]=pqh[ptr-1]; pqh[ptr-1]=k;
+               ptr--;imm++;
+            } else break;
+         }
+         stptr++;
+      }
+         //generate internal chape
+         pqd[stptr]=max(ad,s*rect(x,y,recta,rectb));
+         pqh[stptr]=maxdepth+2;
+         //insert it at its place in the priority queue
+         ptr=stptr;
+         imm=0;
+         while(ptr>0){
+            if(pqd[ptr]>pqd[ptr-1]){//swap
+               k=pqx[ptr]; pqx[ptr]=pqx[ptr-1]; pqx[ptr-1]=k;
+               k=pqy[ptr]; pqy[ptr]=pqy[ptr-1]; pqy[ptr-1]=k;
+               k=pqs[ptr]; pqs[ptr]=pqs[ptr-1]; pqs[ptr-1]=k;
+               k=pqd[ptr]; pqd[ptr]=pqd[ptr-1]; pqd[ptr-1]=k;
+               k=pqh[ptr]; pqh[ptr]=pqh[ptr-1]; pqh[ptr-1]=k;
+               ptr--;imm++;
+            } else break;
+         }
+         mm=mm+imm;ii++;
+         stptr++;
+
+      //d=pqd[stptr-1];x=pqx[stptr-1];y=pqy[stptr-1];s=pqs[stptr-1];
+      bNoExit=(x*x+y*y<bvrm*bvr*bvr);//(d<0.01*cs*bvr);//||((d>0)&&(d-ad>0.01*ad));//
+      i++;
+   };
+   pqd[stptr-1]//minde//
+}

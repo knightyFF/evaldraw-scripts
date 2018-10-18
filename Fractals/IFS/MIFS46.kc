@@ -1,0 +1,90 @@
+(x,y){
+   static binit=1;
+   static frm=-1,mx,my,mr2;
+   if(frm<numframes){
+      frm=numframes;
+      mx=(mousx-0.5*xres)*0.005;
+      my=(0.5*yres-mousy)*0.005;
+      mr2=deifs(mx,my);mr2*=mr2;
+   }
+   if((x-mx)^2+(y-my)^2<mr2) return 0;
+   deifs(x,y)^0.25
+}
+static maxiter=100,maxdepth=30;
+static tcx=0,tcy=1,tcr=sqrt(1);//tcr=sqrt(tcx^2+tcy^2)//is this thing invariant, the same for any tcx and tcy?
+enum {Npq=256};
+deifs(x,y){
+   r2=x*x+y*y;inverted=0;
+   if(r2<1){r2=1/r2;x*=r2;y*=r2;inverted=1;}
+   if(r2<1.75) return 0.04;
+   
+   trx=x;
+   try=y;
+   s=sqrt(r2);r2=s;
+   bvr=tcr/(s-1);//bvr=min(bvr,3);
+   tis=1/s;
+   
+   //priority queu... the most stupid possible :o))
+   auto pqx[Npq];//x
+   auto pqy[Npq];//y
+   auto pqs[Npq];//1/accumulated_scale
+   auto pqd[Npq];//distance
+   auto pqh[Npq];//depth
+   stptr=0;//pointer in the priority queue
+   
+   bvrm=100;//controls the smoothness of the DE field (lower values faster, higher values smoother)
+   
+   {//first instances
+      x0=tcx;y0=tcy;//initial value, faster than beginning at (0,0)
+      pqx[stptr]=x0; pqy[stptr]=y0;
+      pqs[stptr]=tis;//instead of 1 because of the initial value of (1,0)
+      pqd[stptr]=tcr-bvr;
+      pqh[stptr]=0;
+      stptr++;
+   }
+   bNoExit=1;i=0;ii=0;
+   while(bNoExit && i<maxiter){
+      //extract nearest element
+      {
+         depth=pqh[stptr-1];
+         if(depth>maxdepth) break;
+         stptr--;
+         x=pqx[stptr]; y=pqy[stptr];s=pqs[stptr];ad=pqd[stptr];
+         
+      }
+      //generate and insert its children
+      nx=x*trx-y*try;
+      ny=x*try+y*trx;
+      nc=-1;
+      for(j=0;j<2;j++){
+         //generate child j
+         pqx[stptr]=nx+nc*tcx;
+         pqy[stptr]=ny+nc*tcy;
+         pqs[stptr]=s*tis;
+         pqd[stptr]=(sqrt((pqx[stptr])^2+(pqy[stptr])^2)-bvr)*pqs[stptr];
+         pqh[stptr]=depth+1;     
+         nc=1;
+         //insert it at its place
+         ptr=stptr;
+         imm=0;
+         while(ptr>0){
+            if(pqd[ptr]>pqd[ptr-1]){//swap
+               k=pqx[ptr]; pqx[ptr]=pqx[ptr-1]; pqx[ptr-1]=k;
+               k=pqy[ptr]; pqy[ptr]=pqy[ptr-1]; pqy[ptr-1]=k;
+               k=pqs[ptr]; pqs[ptr]=pqs[ptr-1]; pqs[ptr-1]=k;
+               k=pqd[ptr]; pqd[ptr]=pqd[ptr-1]; pqd[ptr-1]=k;
+               k=pqh[ptr]; pqh[ptr]=pqh[ptr-1]; pqh[ptr-1]=k;
+               ptr--;imm++;
+            } else break;
+         }
+         stptr++;
+      }
+      d=pqd[stptr-1];x=pqx[stptr-1];y=pqy[stptr-1];s=pqs[stptr-1];
+      bNoExit=(x*x+y*y<bvrm*bvr*bvr);
+      i++;
+   }
+   DE=0.5*pqd[stptr-1]/bvr;
+   if(inverted)
+      return DE;//good for the interior!
+   return r2^2/(1/DE+r2);//deduced from the interior distance
+}

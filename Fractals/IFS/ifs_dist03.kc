@@ -1,0 +1,35 @@
+(x,y){
+   static mx,my,mr;
+   static frm=-1;
+   if(frm<numframes){
+      frm=numframes;
+      mx=(mousx-0.5*xres)*0.01;
+      my=(0.5*yres-mousy)*0.01;
+      mr=iter(mx,my,1,0,1,0);
+      mr=max(mr,0);
+   }
+   if((x-mx)^2+(y-my)^2<mr^2) return 0;
+   max(0,iter(x,y,1,0,1,0))^0.25
+}
+
+#define ANG 100*PI/180
+#define SCL 1.72
+static rx=SCL*cos(ANG);
+static ry=SCL*sin(ANG);
+static tx=1.,ty=0.5;
+static mi=25;
+static bailout=2^6;
+static cx=-0.75,cy=0.;
+static bvr=3;
+
+iter(x,y,dx,dy,p,n){
+   if(n==mi || x*x+y*y>bailout){
+      r=sqrt(x*x+y*y);
+      dr=sqrt(dx*dx+dy*dy);
+      //if(p==1) return (r-bvr)/dr;
+      if(p<2^10) return 0.5*r*p*(r^(1/p)-bvr^(0.5^mi))/dr/r^(1/p);
+      else return 0.5*r*(log(r)-p/2^mi*log(bvr))/dr;
+   }
+   return min(iter(x*x-y*y+cx,2*x*y+cy,2*(dx*x-dy*y),2*(dx*y+dy*x),p*2,n+1),
+              iter((x-tx)*rx-(y-ty)*ry+tx,(x-tx)*ry+(y-ty)*rx+ty,SCL*dx,SCL*dy,p,n+1));
+}

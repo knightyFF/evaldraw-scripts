@@ -1,0 +1,112 @@
+(x,y){
+   static binit=1;
+   static frm=-1,mx,my,mr2;
+   if(frm<numframes){
+      frm=numframes;
+      mx=(mousx-0.5*xres)*0.01;
+      my=(0.5*yres-mousy)*0.01;
+      mr2=deifs(mx,my);mr2*=mr2;
+   }
+   //if((x-mx)^2+(y-my)^2<mr2) return 0;
+   //x=abs(x);
+   
+      sx=(mousx-0.5*xres)*0.01;
+      sy=(0.5*yres-mousy)*0.01;
+      rs=sqrt(sx^2+sy^2); fs=max(1.3,rs)/rs;sx*=fs;sy*=fs;
+      settrns1(0,1,0,sx,sy);
+      settrns1(1,-1,0,sx,sy);
+      //settrns(0,-1+0.25,-0.04,-0.25*PI,sqrt(2));
+      //settrns(1, 0.25,-0.04,1.25*PI,sqrt(2));
+      //settrns(2, 0+0.44,   1+0.05,0.5,1.7);
+   
+   deifs(x,y)^0.25
+}
+enum {Ntrns=2};
+enum {tcx=0,tcy=1,trr=2,tir=3,tis=4};
+static trns[Ntrns][8];
+settrns(i,scx,scy,sa,ss){
+   if(i>=Ntrns) return;
+   trns[i][tcx]=scx;
+   trns[i][tcy]=scy;
+   trns[i][trr]=ss*cos(sa);
+   trns[i][tir]=ss*sin(sa);
+   trns[i][tis]=abs(1/ss);
+}
+static bvr=1.27;
+settrns1(i,cx,cy,sx,sy){
+   if(i>=Ntrns) return;
+   trns[i][tcx]=cx;
+   trns[i][tcy]=cy;
+   trns[i][trr]=sx;
+   trns[i][tir]=sy;
+   s=sqrt(sx^2+sy^2);
+   bvr=1/(s-1);bvr=min(bvr,10);
+   trns[i][tis]=1/s;
+}
+enum {Npq=256};
+//enum {cx=0,cy=1,cs=2,cd=3};
+deifs(x,y){
+   maxdist=100.0;
+   maxdepth=0;
+   //priority queu
+   auto pqx[Npq];//x
+   auto pqy[Npq];//y
+   auto pqs[Npq];//1/accumulated_scale
+   auto pqd[Npq];//distance
+   auto pqh[Npq];//depth
+   stptr=0;//pointer in the priority queu
+   //bvr=1.27;//bounding volume (a disc centered at 0,0) radius
+   bvrm=100;//controls the smoothness of the DE field (lower values faster, higher values smoother)
+   mm=0;//to compute mean movement number in the priority queu
+   {//first instance
+      pqx[stptr]=x; pqy[stptr]=y;
+      pqs[stptr]=1; pqd[stptr]=sqrt(x*x+y*y)-bvr;
+      maxdist=min(maxdist,pqd[stptr]+2*bvr);
+      pqh[stptr]=0;
+      stptr++;
+   }
+   bNoExit=(x*x+y*y<bvrm*bvr*bvr);i=0;ii=0;
+   while(bNoExit && i<30){
+      //extract nearest element
+      {
+         depth=pqh[stptr-1];maxdepth=max(maxdepth,depth);
+         if(depth>20) break;
+         stptr--;
+         x=pqx[stptr]; y=pqy[stptr];s=pqs[stptr];ad=pqd[stptr];
+         
+      }
+      //generate and insert its children
+      for(j=0;j<Ntrns;j++){
+         //generate child j
+         pqx[stptr]=x*trns[j][trr]-y*trns[j][tir]+trns[j][tcx];
+         pqy[stptr]=x*trns[j][tir]+y*trns[j][trr]+trns[j][tcy];
+         pqs[stptr]=s*trns[j][tis];
+         pqd[stptr]=(sqrt((pqx[stptr])^2+(pqy[stptr])^2)-bvr)*pqs[stptr];
+         pqd[stptr]=max(ad,pqd[stptr]);//this removes discontinuities when the bounding volume doesn't cover it's images
+         //if(pqd[stptr]>maxdist) continue;
+         maxdist=min(maxdist,pqd[stptr]+2*bvr*pqs[stptr]);
+         
+         pqh[stptr]=depth+1;     
+
+         //insert it at its place
+         ptr=stptr;
+         imm=0;
+         while(ptr>0){
+            if(pqd[ptr]>pqd[ptr-1]){//swap
+               k=pqx[ptr]; pqx[ptr]=pqx[ptr-1]; pqx[ptr-1]=k;
+               k=pqy[ptr]; pqy[ptr]=pqy[ptr-1]; pqy[ptr-1]=k;
+               k=pqs[ptr]; pqs[ptr]=pqs[ptr-1]; pqs[ptr-1]=k;
+               k=pqd[ptr]; pqd[ptr]=pqd[ptr-1]; pqd[ptr-1]=k;
+               k=pqh[ptr]; pqh[ptr]=pqh[ptr-1]; pqh[ptr-1]=k;
+               ptr--;imm++;
+            } else break;
+         }
+         mm=mm+imm;ii++;
+         stptr++;
+      }
+      d=pqd[stptr-1];x=pqx[stptr-1];y=pqy[stptr-1];s=pqs[stptr-1];
+      bNoExit=(x*x+y*y<bvrm*bvr*bvr);//(d<0.01*cs*bvr);//||((d>0)&&(d-ad>0.01*ad));//
+      i++;
+   };
+   pqd[stptr-1]//stptr/100;//i/100//0.05*maxdepth//0.1*mm/(ii+1)*(pqd[stptr-1]>0)//
+}
