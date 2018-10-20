@@ -1,0 +1,136 @@
+//ref: http://www.fractalforums.com/3d-fractal-generation/revenge-of-the-half-eaten-menger-sponge/
+(x,y){
+   max(
+      MengerSponge3(x, y, 0.002*mousx),
+      SphereSponge3(x, y, 0.002*mousx)
+      )^0.25
+}
+MengerSponge(x, y, z) {
+   iterations=5;
+   if(x<0.0 || x>1 || y<0 || y>1 || z<0 || z>1 )     { return 0; } // Not part of menger sponge
+   double p=3.0;
+   for(m=1; m<iterations; m++) {
+      double xa = x*p % 3;
+      double ya = y*p % 3;
+      double za = z*p % 3;
+      if(
+         (xa > 1.0 && xa < 2.0   &&   ya > 1.0 && ya < 2.0) ||
+         (ya > 1.0 && ya < 2.0   &&   za > 1.0 && za < 2.0) ||
+         (xa > 1.0 && xa < 2.0   &&   za > 1.0 && za < 2.0)
+
+         ) {return 0;}  // Not part of menger sponge
+      p*=3;
+   }
+   return 1;  // Is part of menger sponge
+}
+
+MengerSponge2(x, y, z) {
+   iterations=5;
+   if(x<0.0 || x>1 || y<0 || y>1 || z<0 || z>1 )     { return 0; } // Not part of menger sponge
+   double p=3.0;
+   for(m=1; m<iterations; m++) {
+      double xa = x*p % 3;
+      double ya = y*p % 3;
+      double za = z*p % 3;
+      xx=abs(xa-1.5);yy=abs(ya-1.5);zz=abs(za-1.5);
+      if(
+         (xx < 0.5 && yy < 0.5) ||
+         (yy < 0.5 && zz < 0.5) ||
+         (xx < 0.5 && zz < 0.5)
+
+         ) {return 0;}  // Not part of menger sponge
+      p*=3;
+   }
+   return 1;  // Is part of menger sponge
+}
+
+MengerSponge3(x, y, z) {
+   x=x*0.5+0.5;y=y*0.5+0.5;z=z*0.5+0.5;
+   iterations=5;
+   
+   xx=abs(x-0.5)-0.5;yy=abs(y-0.5)-0.5;zz=abs(z-0.5)-0.5;
+   d1=max(xx,max(yy,zz));
+   
+   p=1;d=d1;i=0;
+   for(m=1; m<iterations && i<2; m++) {
+
+      xa = 3*x*p % 3;
+      ya = 3*y*p % 3;
+      za = 3*z*p % 3;
+      p*=3;
+      
+      xx=0.5-abs(xa-1.5);yy=0.5-abs(ya-1.5);zz=0.5-abs(za-1.5);
+      d1=min(max(xx,zz),min(max(xx,yy),max(yy,zz)))/p;
+      d=max(d,d1);
+      i+=d1>0;
+   }
+   d*2
+}
+
+SphereSponge(x, y, z) {
+   iterations=5;
+   a=x;b=y;c=z;k=2;
+   for (L = 0; L < iterations; L++)
+   {
+     xx = a * k % 2.0 - 1.0;
+     yy = b * k % 2.0 - 1.0;
+     zz = c * k % 2.0 - 1.0;
+     r2=xx*xx + yy*yy + zz*zz;
+     if ((r2 < 1.03)) return 0;
+      k *= 4.0;
+   }
+   return 1;  // Is part of menger sponge
+}
+
+SphereSponge2(x, y, z) {
+   iterations=5;
+   a=x;b=y;c=z;k=1;
+   for (L = 0; L < iterations; L++)
+   {
+     xx = a * k % 2.0 - 1.0;
+     yy = b * k % 2.0 - 1.0;
+     zz = c * k % 2.0 - 1.0;
+     r2=xx*xx + yy*yy + zz*zz;
+     if ((r2 < 1.03)) return (1.03-sqrt(r2))/k;
+      k *= 4.0;
+   }
+   return 1;  // Is part of menger sponge
+}
+
+SphereSponge3(x, y, z) {
+   x+=1;y+=1;z+=1;
+   intrad=1.8;
+   iterations=10;scl=3;mod=4;
+   a=x;b=y;c=z;k=2;
+   d=0;i=0;
+   for (L = 0; L < iterations && i<4; L++)
+   {
+     xx = a * k % mod - 0.5*mod;
+     yy = b * k % mod - 0.5*mod;
+     zz = c * k % mod - 0.5*mod;
+     r2=xx*xx + yy*yy + zz*zz;
+     d1=(intrad-sqrt(r2))/k;
+     d=max(d,d1);
+     i+=d1>0;
+     
+     k *= scl;
+   }
+   d //return 1;  // Is part of menger sponge
+}
+
+SphereSponge4(x, y, z) {
+   intrad=1.;
+   iterations=5;scl=3;mod=3;
+   a=x;b=y;k=1;
+   d=0;
+   for (L = 0; L < iterations; L++)
+   {
+     xx = a * k % mod - 0.5*mod;
+     yy = b * k % mod - 0.5*mod;
+     r2=xx*xx + yy*yy;
+     //if ((r2 < intrad)) return (1.03-sqrt(r2))/k;
+     d=max(d,(intrad-sqrt(r2))/k);
+      k *= scl;
+   }
+   d^0.25 //return 1;  // Is part of menger sponge
+}
