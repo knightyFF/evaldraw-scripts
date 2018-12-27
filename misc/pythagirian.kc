@@ -1,0 +1,92 @@
+(){
+   cls(0xc0c0c0);
+   setcol(255,255,255);
+   drawijlines();
+   // In order to remove the cases where re and im are not simultaneousely
+   //odd or even.
+   // We have:
+   //  re + im = 2*i+1
+   //  re - im = 2*j+1
+   // i and j non negative integers
+   // This gives:
+   // re = i+j+1
+   // im = i-j
+   for(i=0;i<30;i++)
+      for(j=0; j<20; j++){
+         re = i+j+1; im=i-j;
+         x = re*re-im*im;
+         y = 2*re*im;
+         r = sqrt(re*re+im*im);//Strange! the circle packing seems perfect. Is it?
+         if(x<=0 || y<=0) continue;
+         if(gcd(x,y)==1)
+            setcol(100,100,0);
+         else
+            setcol(200,0,0);// color it red when re and im are not co-primes
+         //drawcirc(x,y,r);
+         drawtri(x,y,r);
+      } 
+}
+static zf = 1, cx=0, cy=0;
+drawcirc(x,y,r){
+   x = cx + x * zf;
+   y = cy + (yres - y * zf);
+   r = r * zf;
+   drawsph(x,y,-r);
+}
+drawtri(x,y,r){
+   //vertices of the triangle
+   x0=0; y0=0;
+   x1=x; y1=0;
+   x2=x; y2=y;
+   //get the centroid
+   xc=(x0+x1+x2)*1/3; 
+   yc=(y0+y1+y2)*1/3;
+   //translate the triangle so it's centroid becomes 0,0
+   x0 -= xc; x1 -= xc; x2 -= xc;
+   y0 -= yc; y1 -= yc; y2 -= yc;
+   //scale the triangle by 1/r
+   r=2/r;
+   x0 *= r; x1 *= r; x2 *= r; 
+   y0 *= r; y1 *= r; y2 *= r; 
+   //translate back to x,y
+   x0 += x; x1 += x; x2 += x;
+   y0 += y; y1 += y; y2 += y;
+   //draw it
+   moveto(cx + x0 * zf, cy + (yres - y0 * zf));
+   lineto(cx + x1 * zf, cy + (yres - y1 * zf));
+   lineto(cx + x2 * zf, cy + (yres - y2 * zf));
+   lineto(cx + x0 * zf, cy + (yres - y0 * zf));
+}
+drawijlines(){
+   for(i=1;i<26;i++){
+      j=-0.5;
+      re = i+j+1; im=i-j;
+      x = re*re-im*im;
+      y = 2*re*im;
+      moveto(cx + x * zf, cy + (yres - y * zf));
+      for(j=-0.4; j<i+0.1; j+=0.1){
+         re = i+j+1; im=i-j;
+         x = re*re-im*im;
+         y = 2*re*im;
+         lineto(cx + x * zf, cy + (yres - y * zf));
+      }
+   }
+   
+   for(j=0;j<26;j++){
+      i=j;
+      re = i+j+1; im=i-j;
+      x = re*re-im*im;
+      y = 2*re*im;
+      moveto(cx + x * zf, cy + (yres - y * zf));
+      for(i=j+0.1; i<26; i+=0.1){
+         re = i+j+1; im=i-j;
+         x = re*re-im*im;
+         y = 2*re*im;
+         lineto(cx + x * zf, cy + (yres - y * zf));
+      }
+   }
+}
+gcd(x,y){
+   do { z=x; x=y%x; y=z; } while (x > 0);
+   y
+}
