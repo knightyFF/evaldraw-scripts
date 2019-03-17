@@ -1,0 +1,58 @@
+static ang=0.5*60*pi/180;
+static MI=5, BO=100;
+static scl,sa,ca,lambda,lscl;
+(x,y,&r,&g,&b) {
+   if(numframes==0){
+      sa=sin(ang);
+      ca=cos(ang);
+      scl=2*ca;
+      lambda=0.5/ca^2;
+      lscl=2/lambda;
+   }
+   t=iter2(x,y)-0.0;
+   t=smoothstep(t*200);
+   r=t*255;g=r;b=r;
+}
+smoothstep(x){
+   x=min(1,max(0,x));
+   x*x*(3-2*x)
+}
+d2hline(x,y){
+   t=max(-1,min(1,x));
+   x=x-t;
+   sqrt(x*x+y*y);
+}
+iter(x,y){
+   d=1;r=x*x+y*y;
+   for(i=0;i<MI && r<BO;i++){
+      x=abs(x);
+      x-=1;
+      x0=x*ca-y*sa;
+      y=x*sa+y*ca;
+      x=x0;
+      y=-y;
+      x*=scl;y*=scl;d*=scl;
+      x+=1;
+      r=x*x+y*y;
+   }
+   //(sqrt(x*x+y*y)-1)/d
+   d2hline(x,y)/d
+}
+iter2(x,y){
+   d=1;r=x*x+y*y;
+   for(i=0;i<MI && r<BO;i++){
+      x=abs(x);
+      x-=1-lambda;
+      t=2*min(0,x*ca-y*sa);
+      x-=ca*t;
+      y+=sa*t;
+      //x+=1-lambda;
+      //x-=1;
+      x-=lambda;
+      x*=lscl;y*=lscl;d*=lscl;
+      x+=1;
+      r=x*x+y*y;
+   }
+   //(sqrt(x*x+y*y)-1)/d
+   d2hline(x,y)/d
+}
