@@ -1,0 +1,185 @@
+static a=1,b=-1,c=-1.47229,ex=3;
+static eps=0.00001;
+()
+{
+   static x[2];
+   static y[2],t1[2],t2[2];
+   c=(yres*0.5-mousy)*0.01;
+   //static a=1,b=-1,c=0.6;
+   cls(0);setcol(255,255,255);
+   //x[0]=-1.5;x[1]=-0.5;
+   x[0]=10*mousx/xres-5;
+   x[1]=x[0]+(mousy)*0.01;
+   x[0]-=(mousy)*0.01;
+   moveto(-xres,-yres);
+   for(i=-5;i<5;i+=0.1){
+      lineto((i+5)*xres/10,(5-xres/yres*(a*i^ex+b*i+c))*yres/10);
+   }
+   moveto(0,yres*0.5);lineto(xres,yres*0.5);
+   moveto(xres*0.5,0);lineto(xres*0.5,yres);
+   
+   f(x,y);
+   drawbox(x,y);
+   df(x);
+   
+   //return;
+   
+   n=firstroot2(x);
+   moveto(xres-360,16);
+   iprint(x);printf(". N = %f\n",n);
+   
+   n=firstroot(x);
+   moveto(xres-360,40);
+   iprint(x);printf(". N = %f\n",n);
+}
+f(x[2],y[2]){
+   //static a=1,b=-1,c=0.6;
+   static t1[2],t2[2];
+   rpow(ex,x,t1);
+   rmul(a,t1,t2);
+   rmul(b,x,t1);
+   add(t1,t2,y);
+   radd(c,y,y);
+}
+df(x[2]){
+   //static a=1,b=-1,c=0.6;
+   static y[2],dy[2],dy1[2],t1[2];
+   rpow(ex-1,x,t1);
+   rmul(ex*a,t1,dy);
+   radd(b,dy,dy);
+   y[0]=a*x[0]^ex+b*x[0]+c;
+   y[1]=a*x[1]^ex+b*x[1]+c;
+   //if(abs(y[0])<=eps) {/*x[1]=x[0];*/ return;}
+   //if(abs(y[1])<=eps) {/*x[0]=x[1];*/ return;}
+   s0=sgn(y[0]);
+   dy1[0]=s0*min(s0*dy[0],s0*dy[1]);
+   s1=sgn(y[1]);
+   dy1[1]=s1*max(s1*dy[0],s1*dy[1]);
+   d=x[1]-x[0];
+   
+   if(abs(y[0])<=eps) t1[0]=x[0]; else
+   if(y[0]*(y[0]+d*dy1[0])>=0) t1[0]=x[1]; else t1[0]=x[0]-y[0]/dy1[0];
+   if(abs(y[1])<=eps) t1[1]=x[1]; else
+   if(y[1]*(y[1]-d*dy1[1])>=0) t1[1]=x[0]; else t1[1]=x[1]-y[1]/dy1[1];
+   setcol(255,0,0);
+
+   moveto((x[0]+5)*xres/10,(5-xres/yres*y[0])*yres/10);
+   lineto((t1[0]+5)*xres/10,(5-xres/yres*0)*yres/10);
+   
+   moveto((x[1]+5)*xres/10,(5-xres/yres*y[1])*yres/10);
+   lineto((t1[1]+5)*xres/10,(5-xres/yres*0)*yres/10);
+   
+   x[0]=t1[0];x[1]=t1[1];
+}
+firstroot(r[2]){
+   r[0]=-5;r[1]=5;
+   static t[2],y[2];
+   m=2;n=0;d=1;
+   while((r[1]-r[0])>eps && r[0]<5){
+      f(r,y);
+      //t[0]=r[0];t[1]=r[1];df(t);
+      d=r[1]-r[0];
+      setcol(256,256,d*256);drawbox(r,y);
+      if((y[1]-y[0])<eps) break;
+      if((y[1]*y[0])<=0){r[1]=r[0]+0.5*d;m=1;}
+      else{
+         
+         r[0]=r[1];
+         r[1]=r[0]+d*m;
+         m=2;
+      }
+      n++;
+   }
+   n
+}
+firstroot2(r[2]){
+   r[0]=-5;r[1]=5;
+   static t[2],ar[2];
+   m=2;n=0;d=1;
+   ar[0]=r[0];ar[1]=r[1];
+   while((r[1]-r[0])>eps && r[0]<5){
+      t[0]=r[0];t[1]=r[1];
+      df(t);
+      if(abs(t[0]-t[1])<=eps) break;
+      if(t[0]<t[1]){
+         d=t[1]-t[0];
+         dr=r[1]-r[0];
+         r[0]=t[0];r[1]=t[1];
+         if(d>0.5*dr){            
+            ar[0]=r[0];ar[1]=r[1];
+            r[1]=r[0]+0.5*d;
+         }
+         m=1;
+      }
+      else{
+         r[0]=r[1];
+         r[1]+=(ar[1]-ar[0])*m;
+         ar[0]=r[0];ar[1]=r[1];
+         m=2;
+      }
+      n++;
+   }
+   r[0]=t[0];r[1]=t[1];
+   n
+}
+drawbox(x[2],y[2]){
+   moveto((x[0]+5)*xres/10,(5-xres/yres*y[0])*yres/10);
+   lineto((x[0]+5)*xres/10,(5-xres/yres*y[1])*yres/10);
+   lineto((x[1]+5)*xres/10,(5-xres/yres*y[1])*yres/10);
+   lineto((x[1]+5)*xres/10,(5-xres/yres*y[0])*yres/10);
+   lineto((x[0]+5)*xres/10,(5-xres/yres*y[0])*yres/10);
+}
+add(x[2],y[2],r[2])
+{
+   r[0]=x[0]+y[0];
+   r[1]=x[1]+y[1];
+}
+radd(_a,x[2],r[2])
+{
+   r[0]=x[0]+_a;
+   r[1]=x[1]+_a;
+}
+neg(x[2],r[2])
+{
+   r[0]=-x[1];
+   r[1]=-x[0];
+}
+sub(x[2],y[2],r[2])
+{
+   neg(y,r);
+   r[0]+=x[0];
+   r[1]+=x[1];
+}
+mul(x[2],y[2],r[2])
+{
+   ac=x[0]*y[0];
+   ad=x[0]*y[1];
+   bc=x[1]*y[0];
+   bd=x[1]*y[1];
+   r[0]=min(min(ac,ad),min(bc,bd));
+   r[1]=max(max(ac,ad),max(bc,bd));
+}
+rmul(_a,x[2],r[2])
+{
+   r[0]=_a*x[0];
+   r[1]=_a*x[1];
+   if(_a<0){_a=r[0];r[0]=r[1];r[1]=_a;}
+}
+rpow(_a,x[2],r[2])
+{
+   r[0]=0;r[1]=0;
+   if(_a<1) return;
+   if(_a-floor(_a)>0)return;
+   _b=_a*0.5;_b=_b-floor(_b);
+   if(_b||(x[0]*x[1]>0)){
+      a0=x[0]^_a;a1=x[1]^_a;
+      r[0]=min(a0,a1);
+      r[1]=max(a0,a1);
+   }else{
+      r[0]=0;
+      r[1]=max(x[0]^_a,x[1]^_a);
+   }
+}
+iprint(x[2]){
+   printf("[ %f , %f ]",x[0],x[1]);
+}

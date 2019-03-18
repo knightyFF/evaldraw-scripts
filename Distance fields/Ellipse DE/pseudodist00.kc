@@ -1,0 +1,23 @@
+(x,y){
+   a=1;b=0.0625;
+   static frm=-1,mx,my,md;
+   if(numframes>frm){
+      frm=numframes;
+      mx=(mousx-0.5*xres)*0.01;
+      my=(0.5*yres-mousy)*0.01;
+      md=pseudodist(mx,my,a,b);
+   }
+   if((x-mx)^2+(y-my)^2<md^2) return 0;
+   pseudodist(x,y,a,b)^0.5
+}
+pseudodist(x,y,a,b){
+   d=(a^2+b^2-x^2-y^2)^2-4*(a^2*b^2-x^2*b^2-y^2*a^2);
+   d=sqrt(d);
+   l=0.5*(x^2+y^2-a^2-b^2+d);
+   m=l-d;
+   x1=sqrt(a^2*(a^2+m)/(a^2-b^2));
+   y1=sqrt(b^2*(b^2+m)/(b^2-a^2));
+   x=abs(x);y=abs(y);
+   d=sqrt((x-x1)^2+(y-y1)^2);
+   d
+}

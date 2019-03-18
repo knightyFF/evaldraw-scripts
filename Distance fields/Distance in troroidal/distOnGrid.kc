@@ -1,0 +1,19 @@
+(x,y){
+   infold(&x);infold(&y);
+   d0=fn(x,y);
+   d1=fn(x-2*sgn(x),y);
+   d2=fn(x,y-2*sgn(y));
+   d3=fn(x-2*sgn(x),y-2*sgn(y));
+   min(min(d0,d1),min(d2,d3))^0.25
+}
+infold(&x){
+   x=0.5*x+0.5;
+   x=x-floor(x);
+   x=(x-0.5)*2;
+}
+fn(x,y){
+   k0=sqrt((x+0.25)^2+(y+0.75)^2)-0.5;
+   k1=sqrt((x-0.01*(mousx-0.5*xres))^2+(y-0.01*(0.5*yres-mousy))^2)-0.3;
+   k2=0;//max(abs(x)-1,abs(y)-1);
+   max(k2,min(k1,k0))
+}

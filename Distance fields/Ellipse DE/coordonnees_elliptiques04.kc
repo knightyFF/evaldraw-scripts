@@ -1,0 +1,17 @@
+(x,y,t){
+   a=1;
+   k2=a^2+x^2+y^2;
+   d=sqrt(k2^2-4*(a*x)^2);
+   cosu=sqrt((k2-d))*sgn(x);
+   chv =sqrt((k2+d));
+   k2=x^2+y^2-a^2;
+   d=sqrt(k2^2+4*(a*y)^2);
+   sinu=sqrt((-k2+d))*sgn(y);
+   shv =sqrt(abs(k2+d));//*sgn(y);
+   u=atan2(sinu,cosu);
+   uu=u*0.5/pi+0.5;
+   thv=shv/chv;
+   v=0.5*log((1+thv)/(1-thv));
+   cos(uu*20*pi+4*t)*0.5+0.5;
+   //shv*0.71
+}

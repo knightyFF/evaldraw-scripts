@@ -1,0 +1,38 @@
+static tab[256][256][2];
+static ff=1;
+(x,y){
+   if(ff){
+      ff=0;
+      for(l=0;l<256;l++)
+         for(c=0;c<256;c++){
+            tab[l][c][0]=(rnd-0.5)*1.+0.5;
+            tab[l][c][1]=(rnd-0.5)*1.+0.5;
+         }
+   }
+   x0=floor(x);x=x-x0;
+   y0=floor(y);y=y-y0;
+   dmin=10000;xmin=0;ymin=0;
+   for(l=-1;l<2;l++)
+      for(c=-1;c<2;c++){
+         xv=tab[y0+l][x0+c][0]+c;
+         yv=tab[y0+l][x0+c][1]+l;
+         d=(x-xv)^2+(y-yv)^2;
+         if(d<dmin){
+            xmin=xv;ymin=yv;
+            dmin=d;
+         }
+      }
+   dpmin=1000;
+   for(l=-1;l<2;l++)
+      for(c=-1;c<2;c++){
+         xv=tab[y0+l][x0+c][0]+c;
+         yv=tab[y0+l][x0+c][1]+l;
+         d=(xmin-xv)^2+(ymin-yv)^2;
+         if(d<2^-20) continue;
+         px=x-0.5*(xmin+xv);py=y-0.5*(ymin+yv);
+         xv=xmin-xv;yv=ymin-yv;
+         d=(px*xv+py*yv)^2/d;
+         dpmin=min(dpmin,d);
+      }
+   sqrt(dpmin)
+}

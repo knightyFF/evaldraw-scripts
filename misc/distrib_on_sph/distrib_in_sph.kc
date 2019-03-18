@@ -1,0 +1,55 @@
+enum {NPT=16}
+() //3DGrad
+{
+   static T[NPT][3];
+   if(numframes==0){
+      get_random_pts_in_sphere(T);
+   }
+   cls(0);
+   clz(1e30);
+   mcam(3);
+   
+   setcol(0x2f8fff);
+   drawTN(T);
+   drawtriedra(1);
+   //n=iter(T);
+   //printnum(n);
+}
+
+get_random_pts_in_sphere(T[NPT][3]){
+   i=0;
+   while(i<NPT){
+      x=2*rnd-1;y=2*nrnd-1;z=2*nrnd-1;
+      r=sqrt(x*x+y*y+z*z);
+      if(r<1){
+         T[i][0]=x;T[i][1]=y;T[i][2]=z;
+         i++;
+      }
+   }
+}
+drawTN(T[NPT][3]){
+   for(i=0;i<NPT;i++){
+      drawsph(T[i][0],T[i][1],T[i][2],0.05);
+   }
+}
+drawtriedra(l)
+{
+   setcol(255,0,0);
+   moveto(0,0,0);
+   lineto(l,0,0);
+   setcol(0,255,0);
+   moveto(0,0,0);
+   lineto(0,l,0);
+   setcol(0,0,255);
+   moveto(0,0,0);
+   lineto(0,0,l);
+}
+mcam(d)
+{
+   p=-(mousy-yres*0.5)*0.01;
+   t=-pi/2+(mousx-xres*0.5)*0.01;
+   fx=-cos(p)*cos(t);fy=-cos(p)*sin(t);fz=-sin(p);
+   dx=cos(p-pi/2)*cos(t);dy=cos(p-pi/2)*sin(t);dz=sin(p-pi/2);
+   rx=cos(t+pi/2);ry=sin(t+pi/2);rz=0;
+   setcam(-d*fx,-d*fy,-d*fz,rx,ry,rz,dx,dy,dz,fx,fy,fz);
+}

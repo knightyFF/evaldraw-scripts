@@ -1,0 +1,45 @@
+(x,y){
+   a=1;b=0.5;//a must be > b
+   static frm=-1,mx,my,md;
+   if(numframes>frm){
+      frm=numframes;
+      mx=(mousx-0.5*xres)*0.01;
+      my=(0.5*yres-mousy)*0.01;
+      md=dist(mx,my,a,b);
+   }
+   if((x-mx)^2+(y-my)^2<md^2) return 0;
+   dist(x,y,a,b)^0.25
+}
+
+dist(x,y,a,b){
+   //go to 1st quadrant. the distance field is symmetric about x and y axis.
+   x=abs(x);y=abs(y);
+   
+   //we use them many times
+   x2=x*x; y2=y*y; a2=a*a; b2=b*b;
+      
+   //find an approximation to t
+   bb=a2+b2-x2-y2;
+   cc=a2*b2-x2*b2-y2*a2;
+   d=sqrt(bb*bb-4*cc);
+   t=0.5*(bb+d);//this is the "hyperbolic" part of the elliptic coordinates of (x,y)
+   x2=a2*(a2-t)/(a2-b2);//x coordinate squared of the approximated nearest point to (x,y)
+   t=sqrt(x2)*(1-b2/a2);//t on medial axis corresponding to x2.
+   //t is the first approximation
+
+   //Refine by newton algorithm
+   //fx is the dot product of the vector (x,y)-(t,0) and the vector perpendicular to (x(t),y(t))-(t,0)
+   t2=t*t;
+   fx=t2*y2*b2+(x-t)^2*(t2*a2-(a2-b2)^2);
+   
+   for(i=0;i<4 && abs(fx)>0.0000001; i++){
+      //derivative of fx
+      dfx=2*(t*((y*b)^2+((x-t)*a)^2)-t^2*(x-t)*a^2+(x-t)*(a2-b2)^2);
+      t=t-fx/dfx;
+      t2=t*t;
+      fx=t2*y2*b2+(x-t)^2*(t2*a2-(a2-b2)^2);
+   }
+   
+   dx=sqrt(1-t^2/(a2-b2))*b;//distance from t to the ellipse. t is always on the medial axis of the ellipse.
+   sqrt((x-t)^2+y^2)-dx //ditance we are looking for
+}

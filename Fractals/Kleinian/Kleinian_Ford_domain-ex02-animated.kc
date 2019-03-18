@@ -1,0 +1,471 @@
+/*Copyright (c) <2015> <Nait Merzouk Abdelaziz>
+
+This software is provided 'as-is', without any express or implied
+warranty. In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+2. This notice may not be removed or altered from any source distribution.
+*/
+
+//Two generators Kleinian groups limit set by knighty (Jan 2015)
+//Early results.
+
+//Use with evaldraw: http://advsys.net/ken/download.htm
+//Press [Esc] key to show the menu
+// then File->load
+//Press [F2] key to hide/show the editing window
+//Press [space bar] key to toggle between the four rendering styles.
+//Press [F7] key to reduce resolution and [Shift][F7] to increase it.
+
+//It is possible to change -slightly- the values in the call to settrans()
+// without breaking it. When that happens, it means the set of ford circles must be modified.
+
+static mtab[1024][2][2][2];
+static itab[100];
+enum {E_iter=0, E_limitset=1, E_tiling=2, E_trap=3}
+static R_mode=E_tiling;//E_limitset;
+static ntrns=13;
+static trp0cx,trp0cy,trp0r,trp1cx,trp1cy,trp1r,trp2cx,trp2cy,trp2r,trp3cx,trp3cy,trp3r;
+static identity=1023,temptab=1000,curtab=4, Ta=0, Tb=1, Tia=2, Tib=3;
+static frm=-1;
+(x,y,t){
+   if(frm<numframes){//executed once. Do initialisations.
+      frm=numframes;
+      settrans(-1.9,0.1,1.9,0.068+0.016*sin(t));//using grandma recipe
+      
+      mtab[identity][0][0][0]=1;mtab[identity][0][0][1]=0;
+      mtab[identity][0][1][0]=0;mtab[identity][0][1][1]=0;
+      mtab[identity][1][0][0]=0;mtab[identity][1][0][1]=0;
+      mtab[identity][1][1][0]=1;mtab[identity][1][1][1]=0;
+      
+      curtab=4;
+      
+      Tab=mulmat2(Ta,Tb); Tiaib=mulmat2(Tia,Tib);
+      Tabiaib=mulmat2(Tab,Tiaib);
+      Tibabia=conjmul2(Tib,Tabiaib,Tb);
+      Tabia=mulmat2(Tab,Tia); Taibia=invmat2(Tabia);
+   
+      Ta2=mulmat2(Ta,Ta);
+      Ta3=mulmat2(Ta2,Ta);
+      Ta4=mulmat2(Ta2,Ta2);
+      Ta5=mulmat2(Ta3,Ta2);
+      Ta6=mulmat2(Ta3,Ta3);
+      Ta7=mulmat2(Ta4,Ta3); Tia7=invmat2(Ta7);
+      Ta8=mulmat2(Ta4,Ta4); Tia8=invmat2(Ta8);
+      Ta9=mulmat2(Ta4,Ta5);
+   
+      Tb2=mulmat2(Tb,Tb);
+      Tb3=mulmat2(Tb2,Tb);
+      Tb4=mulmat2(Tb2,Tb2);
+      Tb5=mulmat2(Tb3,Tb2);
+      Tb6=mulmat2(Tb3,Tb3);
+      Tb7=mulmat2(Tb4,Tb3); Tia7=invmat2(Ta7);
+      Tb8=mulmat2(Tb4,Tb4); Tia8=invmat2(Ta8);
+      Tb9=mulmat2(Tb4,Tb5);
+   
+      Tbia1=mulmat2(Tb,Tia);
+      Tbia2=mulmat2(Tbia1,Tia);
+      Tbia3=mulmat2(Tbia2,Tia);
+      Tbia4=mulmat2(Tbia3,Tia);
+      Tbia5=mulmat2(Tbia4,Tia);
+      Tbia6=mulmat2(Tbia5,Tia);
+      Tbia7=mulmat2(Tbia6,Tia);
+      Tbia8=mulmat2(Tbia7,Tia);
+      Tbia9=mulmat2(Tbia8,Tia);
+      Tc=Tbia8; Tic=invmat2(Tc);
+      Tac1=mulmat2(Ta,Tc);
+      Tac2=mulmat2(Tac1,Tc);
+      Tac3=mulmat2(Tac2,Tc);
+      Td=Tac1; Tid=invmat2(Td);
+      Tcd1=mulmat2(Tc,Td);
+      Tcd2=mulmat2(Tcd1,Td);
+      Tcd3=mulmat2(Tcd2,Td);
+      Te=Tcd1; Tie=invmat2(Te);
+      Tde1=mulmat2(Td,Te);
+      Tde2=mulmat2(Tde1,Te);
+   
+      Tab1=mulmat2(Ta,Tb);
+      Tab2=mulmat2(Ta,Tb2);
+      Tab3=mulmat2(Ta,Tb3);
+      Tab4=mulmat2(Ta,Tb4);
+      Tab5=mulmat2(Ta,Tb5);
+      Tab6=mulmat2(Ta,Tb6);
+      Tab7=mulmat2(Ta,Tb7);
+      Tab8=mulmat2(Ta,Tb8); Tib8ia=invmat2(Tab8);
+      Tab9=mulmat2(Ta,Tb9);
+      Tab10=mulmat2(Tab9,Tb);
+   
+      Tacia=conjmul2(Tb,Tc,Tia);
+
+      
+      //Used transforms, their inverses are not listed
+      itab[0]=Ta8; itab[1]=Ta7; itab[2]=Ta6; itab[3]=Ta5;
+      itab[4]=Ta4; itab[5]=Ta3; itab[6]=Ta2; itab[7]=Ta;
+      itab[8]=Tb;
+      itab[9]=Tabia;
+      itab[10]=Tbia1;
+      itab[11]=Tab9; itab[12]=Tab8; itab[13]=Tab7; itab[14]=Tab6;
+      itab[15]=Tab5; itab[16]=Tab4; itab[17]=Tab3; itab[18]=Tab2; itab[19]=Tab1;
+   
+      
+      //traps
+      trp0cx=0.5*(1-4);trp0cy=0.5*0.21;trp0r=0.5*sqrt((1+4)^2+0.21^2);
+      trp1cx=-trp0cx;trp1cy=-trp0cy;trp1r=trp0r;
+      trp2cx=0.5*(0.23+1);trp2cy=0.5*0.032;trp2r=0.5*sqrt((1-0.23)^2+0.032^2);
+      trp3cx=-trp2cx;trp3cy=-trp2cy;trp3r=trp2r;
+   }
+   if(frm<numframes){//Executed each frame.
+      frm=numframes;
+      if(keystatus[0x39]){keystatus[0x39]=0; R_mode=(R_mode+1)%4;}//"space bar"
+   }
+   deriv=1;
+   k=escape(x,y,deriv,100);
+   if(R_mode==E_iter) return k/20;
+   if(R_mode==E_trap) return trapped2(x,y);
+   if(R_mode==E_tiling) return min(0.6,(map(x,y)*deriv)^0.25);
+   if(R_mode==E_limitset) return min(0.6,(trapval(x,y)*deriv)^0.25);
+   //sqrt(x*x+y*y)  
+}
+
+map(x,y){//for tiling
+   m=1e50;
+   for(i=0; i<ntrns; i++){
+      cind=itab[i];
+      ar=mtab[cind][0][0][0]; ai=mtab[cind][0][0][1];
+      br=mtab[cind][0][1][0]; bi=mtab[cind][0][1][1];
+      cr=mtab[cind][1][0][0]; ci=mtab[cind][1][0][1];
+      dr=mtab[cind][1][1][0]; di=mtab[cind][1][1][1];
+      r2=1/(cr^2+ci^2);
+      cx=cr;cy=ci;
+      cinv(cx,cy);
+      cmul(-dr,-di,cx,cy,cx,cy);
+      m=min(m,(x-cx)^2+(y-cy)^2-r2);
+      
+      cx=-cr;cy=-ci;
+      cinv(cx,cy);
+      cmul(-ar,-ai,cx,cy,cx,cy);
+      m=min(m,(x-cx)^2+(y-cy)^2-r2);
+   }
+   m
+}
+
+escape(&x,&y,&deriv,maxiter){
+   iters=0; tottrns=0; deriv=1;
+   for(i=0;i<maxiter;i++){
+      iters+=1;
+      k=escapeOneIter(x,y,deriv);
+      tottrns+=k;
+      if(k==0) break;
+   }
+   return tottrns;
+}
+
+escapeOneIter(&x,&y,&deriv){
+   transformed=0;
+   for(i=0; i<ntrns; i++){//for all transformations that participate to the ford fundamental domain
+      if(trapped(x,y) && R_mode==E_trap) break;
+            cind=itab[i];
+      ar=mtab[cind][0][0][0]; ai=mtab[cind][0][0][1];
+      br=mtab[cind][0][1][0]; bi=mtab[cind][0][1][1];
+      cr=mtab[cind][1][0][0]; ci=mtab[cind][1][0][1];
+      dr=mtab[cind][1][1][0]; di=mtab[cind][1][1][1];
+      //compute c*z+d
+      xd=x;yd=y;
+      cmul(x,y,cr,ci,xd,yd); xd+=dr; yd+=di;
+      //if the derivative == 1/|c*z+d|^2 > 1 that is, |c*z+d|^2<1, we do the transfrom
+      //--> compute |c*z+d|^2
+      nsd=xd*xd+yd*yd; //nsd==norm squared of (inverse of) derivative
+      // <1 ?
+      if(nsd<1){//do the transformation
+         transformed+=1;
+         deriv*=nsd;
+         mobius(x,y,x,y,ar,ai,br,bi,cr,ci,dr,di);
+      }
+      
+      //now the inverse...
+      //compute -c*z+a
+      xd=x;yd=y;
+      cmul(x,y,-cr,-ci,xd,yd); xd+=ar; yd+=ai;
+      nsd=xd*xd+yd*yd;
+      if(nsd<1){
+         transformed+=1;
+         deriv*=nsd;
+         mobius(x,y,x,y,dr,di,-br,-bi,-cr,-ci,ar,ai);
+      }
+      
+   }
+   return transformed;
+}
+trapped(x,y){
+   t0=(x-trp0cx)^2+(y-trp0cy)^2>trp0r^2;
+   t1=(x-trp1cx)^2+(y-trp1cy)^2>trp1r^2;
+   t2=(x-trp2cx)^2+(y-trp2cy)^2<trp2r^2;
+   t3=(x-trp3cx)^2+(y-trp3cy)^2<trp3r^2;
+   return t0 || t1 || t2 || t3;
+}
+trapped2(x,y){
+   if((x-trp0cx)^2+(y-trp0cy)^2>trp0r^2) return 0.65;
+   if((x-trp1cx)^2+(y-trp1cy)^2>trp1r^2) return 0.65;
+   if((x-trp2cx)^2+(y-trp2cy)^2<trp2r^2) return 0.1;
+   if((x-trp3cx)^2+(y-trp3cy)^2<trp3r^2) return 0.1;
+   0.75
+}
+trapval(x,y){
+   t0=-((x-trp0cx)^2+(y-trp0cy)^2)+trp0r^2;
+   t1=-((x-trp1cx)^2+(y-trp1cy)^2)+trp1r^2;
+   t2=(x-trp2cx)^2+(y-trp2cy)^2-trp2r^2;
+   t3=(x-trp3cx)^2+(y-trp3cy)^2-trp3r^2;
+   return min(min(t0,t1),min(t2,t3));
+}
+conjmul(a,b,c,d){//d=a*b*c
+   mulmat(a,b,temptab);
+   mulmat(temptab,c,d);
+}
+conjmul2(a,b,c){//d=a*b*c
+   d=curtab; curtab+=1;
+   mulmat(a,b,temptab);
+   mulmat(temptab,c,d);
+   d
+}
+mulmat(i,j,k){
+   tr=0;ti=0;
+   cmul(mtab[i][0][0][0],mtab[i][0][0][1],mtab[j][0][0][0],mtab[j][0][0][1],mtab[k][0][0][0],mtab[k][0][0][1]);
+   cmul(mtab[i][0][1][0],mtab[i][0][1][1],mtab[j][1][0][0],mtab[j][1][0][1],tr,ti);
+   mtab[k][0][0][0]+=tr; mtab[k][0][0][1]+=ti;
+   
+   cmul(mtab[i][0][0][0],mtab[i][0][0][1],mtab[j][0][1][0],mtab[j][0][1][1],mtab[k][0][1][0],mtab[k][0][1][1]);
+   cmul(mtab[i][0][1][0],mtab[i][0][1][1],mtab[j][1][1][0],mtab[j][1][1][1],tr,ti);
+   mtab[k][0][1][0]+=tr; mtab[k][0][1][1]+=ti;
+   
+   cmul(mtab[i][1][0][0],mtab[i][1][0][1],mtab[j][0][0][0],mtab[j][0][0][1],mtab[k][1][0][0],mtab[k][1][0][1]);
+   cmul(mtab[i][1][1][0],mtab[i][1][1][1],mtab[j][1][0][0],mtab[j][1][0][1],tr,ti);
+   mtab[k][1][0][0]+=tr; mtab[k][1][0][1]+=ti;
+   
+   cmul(mtab[i][1][0][0],mtab[i][1][0][1],mtab[j][0][1][0],mtab[j][0][1][1],mtab[k][1][1][0],mtab[k][1][1][1]);
+   cmul(mtab[i][1][1][0],mtab[i][1][1][1],mtab[j][1][1][0],mtab[j][1][1][1],tr,ti);
+   mtab[k][1][1][0]+=tr; mtab[k][1][1][1]+=ti;
+}
+mulmat2(i,j){
+   k=curtab; curtab+=1;
+   mulmat(i,j,k);
+   k
+}
+invmat(i,j){
+   mtab[j][0][0][0]=mtab[i][1][1][0]; mtab[j][0][0][1]=mtab[i][1][1][1];
+   mtab[j][1][1][0]=mtab[i][0][0][0]; mtab[j][1][1][1]=mtab[i][0][0][1];
+   mtab[j][0][1][0]=-mtab[i][0][1][0]; mtab[j][0][1][1]=-mtab[i][0][1][1];
+   mtab[j][1][0][0]=-mtab[i][1][0][0]; mtab[j][1][0][1]=-mtab[i][1][0][1];
+}
+invmat2(i){
+   k=curtab; curtab+=1;
+   invmat(i,k);
+   k
+}
+mobi(&x,&y,i){
+   mobius(x,y,x,y,mtab[i][0][0][0],mtab[i][0][0][1],
+                  mtab[i][0][1][0],mtab[i][0][1][1],
+                  mtab[i][1][0][0],mtab[i][1][0][1],
+                  mtab[i][1][1][0],mtab[i][1][1][1]);
+}
+mobius(x,y,&xr,&yr,ar,ai,br,bi,cr,ci,dr,di){
+   x1=x*ar-y*ai; y1=x*ai+y*ar;
+   x1+=br; y1+=bi;
+   x2=x*cr-y*ci; y2=x*ci+y*cr;
+   x2+=dr; y2+=di;
+   n2=1/(x2*x2+y2*y2);
+   y2=-y2;
+   xr=x1*x2-y1*y2; yr=x1*y2+y1*x2;
+   xr*=n2; yr*=n2;
+}
+settrans(tar,tai,tbr,tbi){//A refaire a et A
+   //compute tab
+   tar2=tar^2-tai^2; tai2=2*tar*tai;
+   tbr2=tbr^2-tbi^2; tbi2=2*tbr*tbi;
+   ppr=tar2*tbr2-tai2*tbi2; ppi=tar2*tbi2+tai2*tbr2;
+   sr=tar2+tbr2; si=tai2+tbi2;
+   sr*=-4; si*=-4;
+   sr+=ppr; si+=ppi;
+   csqrt(&sr,&si);
+   tabr=tar*tbr-tai*tbi; tabi=tar*tbi+tai*tbr;
+   tabr+=sr; tabi+=si;
+   tabr*=0.5; tabi*=0.5;
+   //At this point we have tab
+   
+   //compute z0
+   tabm2r=tabr-2; tabm2i=tabi;
+   numr=tabm2r*tbr-tabm2i*tbi; numi=tabm2r*tbi+tabm2i*tbr;
+   denr=tbr*tabr-tbi*tabi; deni=tbr*tabi+tbi*tabr;
+   denr-=2*tar; deni-=2*tai;
+   denr-=2*tabi; deni+=2*tabr;
+   cinv(denr,deni);
+   z0r=numr*denr-numi*deni; z0i=numr*deni+numi*denr;
+   iz0r=z0r;iz0i=z0i; cinv(iz0r,iz0i);
+   //
+   
+   //compute matrix b
+   b00r=0.5*tbr; b00i=0.5*tbi-1; b01r=0.5*tbr; b01i=0.5*tbi;
+   b10r=0.5*tbr; b10i=0.5*tbi; b11r=0.5*tbr; b11i=0.5*tbi+1;
+   //compute matrix B=b^-1 (the determinant of b is 1)
+   ib00r=b11r; ib00i=b11i; ib01r=-b01r; ib01i=-b01i;
+   ib10r=-b10r; ib10i=-b10i; ib11r=b00r; ib11i=b00i;
+   //compute matrix a
+   a00r=0.5*tabr; a00i=0.5*tabi; a01r=0.5*tabr-1; a01i=0.5*tabi;
+   a10r=0.5*tabr+1; a10i=0.5*tabi; a11r=0.5*tabr; a11i=0.5*tabi;
+   cmul(a01r,a01i,iz0r,iz0i,a01r,a01i);
+   cmul(a10r,a10i,z0r,z0i,a10r,a10i);
+   //a:=a*B
+   ta00r=a00r; ta00i=a00i; ta01r=a01r; ta01i=a01i;
+   ta10r=a10r; ta10i=a10i; ta11r=a11r; ta11i=a11i;
+   tr=0;ti=0;
+   cmul(ta00r,ta00i,ib00r,ib00i,a00r,a00i);
+   cmul(ta01r,ta01i,ib10r,ib10i,tr,ti);a00r+=tr;a00i+=ti;
+   cmul(ta00r,ta00i,ib01r,ib01i,a01r,a01i);
+   cmul(ta01r,ta01i,ib11r,ib11i,tr,ti);a01r+=tr;a01i+=ti;
+   cmul(ta10r,ta10i,ib00r,ib00i,a10r,a10i);
+   cmul(ta11r,ta11i,ib10r,ib10i,tr,ti);a10r+=tr;a10i+=ti;
+   cmul(ta10r,ta10i,ib01r,ib01i,a11r,a11i);
+   cmul(ta11r,ta11i,ib11r,ib11i,tr,ti);a11r+=tr;a11i+=ti;
+   //compute matrix A=a^-1 (the determinant of b is 1)
+   ia00r=a11r; ia00i=a11i; ia01r=-a01r; ia01i=-a01i;
+   ia10r=-a10r; ia10i=-a10i; ia11r=a00r; ia11i=a00i;
+   ////////////////////////////////////////////////////
+   mtab[0][0][0][0]=a00r; mtab[0][0][0][1]=a00i;
+   mtab[0][0][1][0]=a01r; mtab[0][0][1][1]=a01i;
+   mtab[0][1][0][0]=a10r; mtab[0][1][0][1]=a10i;
+   mtab[0][1][1][0]=a11r; mtab[0][1][1][1]=a11i;
+   
+   mtab[1][0][0][0]=b00r; mtab[1][0][0][1]=b00i;
+   mtab[1][0][1][0]=b01r; mtab[1][0][1][1]=b01i;
+   mtab[1][1][0][0]=b10r; mtab[1][1][0][1]=b10i;
+   mtab[1][1][1][0]=b11r; mtab[1][1][1][1]=b11i;
+   
+   mtab[2][0][0][0]=ia00r; mtab[2][0][0][1]=ia00i;
+   mtab[2][0][1][0]=ia01r; mtab[2][0][1][1]=ia01i;
+   mtab[2][1][0][0]=ia10r; mtab[2][1][0][1]=ia10i;
+   mtab[2][1][1][0]=ia11r; mtab[2][1][1][1]=ia11i;
+   
+   mtab[3][0][0][0]=ib00r; mtab[3][0][0][1]=ib00i;
+   mtab[3][0][1][0]=ib01r; mtab[3][0][1][1]=ib01i;
+   mtab[3][1][0][0]=ib10r; mtab[3][1][0][1]=ib10i;
+   mtab[3][1][1][0]=ib11r; mtab[3][1][1][1]=ib11i;
+}
+Jorgrnsen_recipe(tar,tai,tbr,tbi,s){//s must be 1 or -1
+   //compute tab
+   tar2=tar^2-tai^2; tai2=2*tar*tai;
+   tbr2=tbr^2-tbi^2; tbi2=2*tbr*tbi;
+   ppr=tar2*tbr2-tai2*tbi2; ppi=tar2*tbi2+tai2*tbr2;
+   sr=tar2+tbr2; si=tai2+tbi2;
+   sr*=-4; si*=-4;
+   sr+=ppr; si+=ppi;
+   csqrt(&sr,&si);
+   tabr=tar*tbr-tai*tbi; tabi=tar*tbi+tai*tbr;
+   tabr+=s*sr; tabi+=s*si;
+   tabr*=0.5; tabi*=0.5;
+   //At this point we have tab
+   //
+   //1/tab
+   itabr=tabr;itabi=tabi;
+   cinv(itabr,itabi);
+   
+   itab2r=itabr^2-itabi^2; itab2i=2*itabr*itabi;
+   
+   //
+   a00r=tbr;a00i=tbi;cmul(a00r,a00i,itabr,itabi,a00r,a00i);
+   a00r=tar-a00r;a00i=tai-a00i;
+   a01r=tar;a01i=tai;cmul(a01r,a01i,itab2r,itab2i,a01r,a01i);
+   a10r=tar;a10i=tai;
+   a11r=tbr;a11i=tbi;cmul(a11r,a11i,itabr,itabi,a11r,a11i);
+   
+   //
+   b00r=tar;b00i=tai;cmul(b00r,b00i,itabr,itabi,b00r,b00i);
+   b00r=tbr-b00r;b00i=tbi-b00i;
+   b01r=-tbr;b01i=-tbi;cmul(b01r,b01i,itab2r,itab2i,b01r,b01i);
+   b10r=-tbr;b10i=-tbi;
+   b11r=tar;b11i=tai;cmul(b11r,b11i,itabr,itabi,b11r,b11i);
+   
+   //compute matrix B=b^-1 (the determinant of b is 1)
+   ib00r=b11r; ib00i=b11i; ib01r=-b01r; ib01i=-b01i;
+   ib10r=-b10r; ib10i=-b10i; ib11r=b00r; ib11i=b00i;
+
+   //compute matrix A=a^-1 (the determinant of b is 1)
+   ia00r=a11r; ia00i=a11i; ia01r=-a01r; ia01i=-a01i;
+   ia10r=-a10r; ia10i=-a10i; ia11r=a00r; ia11i=a00i;
+   ////////////////////////////////////////////////////
+   mtab[0][0][0][0]=a00r; mtab[0][0][0][1]=a00i;
+   mtab[0][0][1][0]=a01r; mtab[0][0][1][1]=a01i;
+   mtab[0][1][0][0]=a10r; mtab[0][1][0][1]=a10i;
+   mtab[0][1][1][0]=a11r; mtab[0][1][1][1]=a11i;
+   
+   mtab[1][0][0][0]=b00r; mtab[1][0][0][1]=b00i;
+   mtab[1][0][1][0]=b01r; mtab[1][0][1][1]=b01i;
+   mtab[1][1][0][0]=b10r; mtab[1][1][0][1]=b10i;
+   mtab[1][1][1][0]=b11r; mtab[1][1][1][1]=b11i;
+   
+   mtab[2][0][0][0]=ia00r; mtab[2][0][0][1]=ia00i;
+   mtab[2][0][1][0]=ia01r; mtab[2][0][1][1]=ia01i;
+   mtab[2][1][0][0]=ia10r; mtab[2][1][0][1]=ia10i;
+   mtab[2][1][1][0]=ia11r; mtab[2][1][1][1]=ia11i;
+   
+   mtab[3][0][0][0]=ib00r; mtab[3][0][0][1]=ib00i;
+   mtab[3][0][1][0]=ib01r; mtab[3][0][1][1]=ib01i;
+   mtab[3][1][0][0]=ib10r; mtab[3][1][0][1]=ib10i;
+   mtab[3][1][1][0]=ib11r; mtab[3][1][1][1]=ib11i;
+}
+Maskit_recipe(tar,tai){
+     
+   //compute matrix b
+   b00r=1; b00i=0; b01r=2; b01i=0;
+   b10r=0; b10i=0; b11r=1; b11i=0;
+   //compute matrix B=b^-1 (the determinant of b is 1)
+   ib00r=b11r; ib00i=b11i; ib01r=-b01r; ib01i=-b01i;
+   ib10r=-b10r; ib10i=-b10i; ib11r=b00r; ib11i=b00i;
+   //compute matrix a
+   a00r=-tai; a00i=tar; a01r=0; a01i=1;
+   a10r=0;   a10i=1;   a11r=0; a11i=0;
+   //compute matrix A=a^-1 (the determinant of b is 1)
+   ia00r=a11r; ia00i=a11i; ia01r=-a01r; ia01i=-a01i;
+   ia10r=-a10r; ia10i=-a10i; ia11r=a00r; ia11i=a00i;
+   ////////////////////////////////////////////////////
+   mtab[0][0][0][0]=a00r; mtab[0][0][0][1]=a00i;
+   mtab[0][0][1][0]=a01r; mtab[0][0][1][1]=a01i;
+   mtab[0][1][0][0]=a10r; mtab[0][1][0][1]=a10i;
+   mtab[0][1][1][0]=a11r; mtab[0][1][1][1]=a11i;
+   
+   mtab[1][0][0][0]=b00r; mtab[1][0][0][1]=b00i;
+   mtab[1][0][1][0]=b01r; mtab[1][0][1][1]=b01i;
+   mtab[1][1][0][0]=b10r; mtab[1][1][0][1]=b10i;
+   mtab[1][1][1][0]=b11r; mtab[1][1][1][1]=b11i;
+   
+   mtab[2][0][0][0]=ia00r; mtab[2][0][0][1]=ia00i;
+   mtab[2][0][1][0]=ia01r; mtab[2][0][1][1]=ia01i;
+   mtab[2][1][0][0]=ia10r; mtab[2][1][0][1]=ia10i;
+   mtab[2][1][1][0]=ia11r; mtab[2][1][1][1]=ia11i;
+   
+   mtab[3][0][0][0]=ib00r; mtab[3][0][0][1]=ib00i;
+   mtab[3][0][1][0]=ib01r; mtab[3][0][1][1]=ib01i;
+   mtab[3][1][0][0]=ib10r; mtab[3][1][0][1]=ib10i;
+   mtab[3][1][1][0]=ib11r; mtab[3][1][1][1]=ib11i;
+}
+cmul(z0r,z0i,z1r,z1i,&zr,&zi){
+   z2r=z0r*z1r-z0i*z1i; z2i=z0r*z1i+z0i*z1r;
+   zr=z2r; zi=z2i;
+}
+csqrt(&sr,&si){
+   rs=(sr^2+si^2)^0.25;
+   ts=atan2(si,sr);
+   sr=rs*cos(0.5*ts); si=rs*sin(0.5*ts);
+}
+cinv(&sr,&si){
+   ir2=1/(sr^2+si^2);
+   sr=sr*ir2; si=-si*ir2;
+}
+cdiv(z0r,z0i,z1r,z1i,&zr,&zi){
+   cinv(z1r,z1i);
+   cmul(z0r,z0i,z1r,z1i,zr,zi);
+}

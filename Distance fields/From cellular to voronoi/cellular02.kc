@@ -1,0 +1,26 @@
+static tab[256][256][2];
+static ff=1;
+(x,y){
+   if(ff){
+      ff=0;
+      for(l=0;l<256;l++)
+         for(c=0;c<256;c++){
+            tab[l][c][0]=rnd;
+            tab[l][c][1]=rnd;
+         }
+   }
+   x0=floor(x);x=x-x0;
+   y0=floor(y);y=y-y0;
+   dmin=10000;dpmin=dmin;
+   for(l=-1;l<2;l++)
+      for(c=-1;c<2;c++){
+         xv=tab[y0+l][x0+c][0]+c;
+         yv=tab[y0+l][x0+c][1]+l;
+         d=(x-xv)^2+(y-yv)^2;
+         if(d<dmin){
+            dpmin=dmin;
+            dmin=d;
+         }else if(d<dpmin) dpmin=d;
+      }
+   1-dmin
+}

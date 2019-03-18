@@ -1,0 +1,739 @@
+//Header begin////////////////////////////////////////////////////////////////////////////////////
+// Implicit surfaces viewer 
+// By Abdelaziz Nait Merzouk (knight_aziz@hotmail.com)
+// Nov, Dec 2008
+// 
+// TERMES OF USE
+// 1- No Warranty: Use at your own risk.
+// 2- You can distribute this file to anyone you wish.
+// 3- Enjoy.
+//
+// See readme.txt for more informations
+//Header end//////////////////////////////////////////////////////////////////////////////////////
+
+//Global variables////////////////////////////////////////////////////////////////////////////////
+static testing=0;// Press "D" to see the number of iterations (blue component)
+static param1=1,param2=1,param3=1,param4=1,param5=1,time=0;// hold "1","2"... and drag the mouse
+static sclit=0;
+static bounding=0,bradius=2.5;//Size of the bounding sphere / rectangle
+static cheby[200][200];//For chmutovN and CN functions
+
+//Main////////////////////////////////////////////////////////////////////////////////////////////
+//Press {ctrl enter} to recompile and reset parameters to default
+(x,y,&r,&g,&b)
+{
+   static theta=0.5,phi=0.3,Dist=15,focal=5;//view params
+   static Ltheta=1,Lphi=0.5,LDist=5;//view params
+   static O[3],L[3],vi[3],vj[3],vk[3],vt[3],O2=0;
+   static frm=-1;
+   static mx,my,mz;
+   enum {showlight=0};
+   static maxreflextions=0,shadows=0,shading=0,interactive=0;//Try "S" "B" and "I" keys
+   static fCol[3]={220,220,220};//surface's front color
+   static bCol[3]={200,100,50};//surface's back color
+   static sCol[3]={20,60,90};//environment's base color
+   static shine=20;//Shininess
+   static rfactor=0.5;//Reflexion factor
+   static threshold=1.0,maxstep=0.125,errmax=0.000030517578125,maxiter=500;//FirstRoot() parameters
+   
+   eps=2^-16;ieps=2^16;
+   
+   if (numframes>frm)
+   {
+      if(frm==-1) for(j=1;j<200;j++)for(i=1;i<j;i++) cheby[j][i]=1/(2*sin(i*pi/j)^2);
+      errmax=2^-11;
+      if (keystat(0x2a)){ //Left Shift
+         readmouse(mx,my,mz);
+         theta+=mx*0.01;
+         phi-=my*0.01;phi=max(-0.5*pi,min(0.5*pi,phi));
+         Dist+=Dist*mz*0.0005;dist=max(0,dist);
+         interactive=1;
+      }  else if (keystat(0x1d)){ //Left Ctrl
+         readmouse(mx,my,mz);
+         Ltheta+=mx*0.01;
+         Lphi-=my*0.01;Lphi=max(-0.5*pi,min(0.5*pi,Lphi));
+         LDist+=LDist*mz*0.0005;Ldist=max(0,Ldist);
+         interactive=1;
+      }  else if (keystat(0x36)){ //Right Shift
+         readmouse(mx,my,mz);
+         bradius+=mx*0.01;
+         bradius=max(1,bradius);
+         bradius=min(4,bradius);
+         interactive=1;
+      }  else if(keystatus[0x02]){//"1"
+         readmouse(mx,my,mz);
+         param1+=mx*0.01;
+         interactive=1;
+      } else if(keystatus[0x03]){//"2"
+         readmouse(mx,my,mz);
+         param2+=mx*0.01;
+         interactive=1;
+      } else if(keystatus[0x04]){//"3"
+         readmouse(mx,my,mz);
+         param3+=mx*0.01;
+         interactive=1;
+      } else if(keystatus[0x05]){//"4"
+         readmouse(mx,my,mz);
+         param4+=mx*0.01;
+         interactive=1;
+      } else if(keystatus[0x06]){//"5"
+         readmouse(mx,my,mz);
+         param5+=mx*0.005;
+         interactive=1;
+      } else {readmouse(mx,mx,mx);interactive=0;}
+      if(keystatus[0x30]){keystatus[0x30]=0;bounding=(bounding+1)%2;}//"B"
+      if(keystatus[0x1f]){keystatus[0x1f]=0;shadows=(shadows+1)%2;}  //"S" for shadows
+      if(keystatus[0x20]){keystatus[0x20]=0;testing=(testing+1)%2;}  //"D"
+      if(keystatus[0x2e]){keystatus[0x2e]=0;sclit=(sclit+1)%2;}  //"C"
+      if(keystatus[0x26]){keystatus[0x26]=0;shading=(shading+1)%3;}  //"L" for lighting (!?)
+      if(keystatus[0x17]){//"I"
+         maxiter+=(keystatus[0x0d]+keystatus[0x4e])*10;
+         maxiter-=(keystatus[0x07]+keystatus[0x4a])*10;
+         maxiter=max(maxiter,10);maxiter=min(maxiter,1000);
+         keystatus[0x0d]=0;keystatus[0x4e]=0;
+         keystatus[0x07]=0;keystatus[0x4a]=0;
+      } 
+      if(keystatus[0x14]){//"T"
+         threshold+=(keystatus[0x0d]+keystatus[0x4e])*0.1;
+         threshold-=(keystatus[0x07]+keystatus[0x4a])*0.1;
+         threshold=max(threshold,0.1);threshold=min(threshold,10);
+         keystatus[0x0d]=0;keystatus[0x4e]=0;
+         keystatus[0x07]=0;keystatus[0x4a]=0;
+      }  
+      if(keystatus[0x12]){//"E"
+         errmax*=2^(keystatus[0x0d]+keystatus[0x4e]);
+         errmax*=2^-(keystatus[0x07]+keystatus[0x4a]);
+         errmax=max(errmax,2^-26);errmax=min(errmax,2^-8);
+         keystatus[0x0d]=0;keystatus[0x4e]=0;
+         keystatus[0x07]=0;keystatus[0x4a]=0;
+      } 
+      if(keystatus[0x27]){//"M"
+         maxstep*=2^(keystatus[0x0d]+keystatus[0x4e]);
+         maxstep*=2^-(keystatus[0x07]+keystatus[0x4a]);
+         maxstep=max(maxstep,1/32);maxstep=min(maxstep,1);
+         keystatus[0x0d]=0;keystatus[0x4e]=0;
+         keystatus[0x07]=0;keystatus[0x4a]=0;
+      }
+      if(keystatus[0x13]){//"R" for reflexions
+         maxreflextions+=(keystatus[0x0d]+keystatus[0x4e]);
+         maxreflextions-=(keystatus[0x07]+keystatus[0x4a]);
+         maxreflextions=max(maxreflextions,0);level=min(maxreflextions,3);//Not necessary to go beyond 3 reflexions
+         keystatus[0x0d]=0;keystatus[0x4e]=0;
+         keystatus[0x07]=0;keystatus[0x4a]=0;
+      }
+           
+      O[0]=dist*cos(phi)*cos(theta);
+      O[1]=dist*cos(phi)*sin(theta);
+      O[2]=dist*sin(phi);
+      O2=O[0]*O[0]+O[1]*O[1]+O[2]*O[2];
+      L[0]=Ldist*cos(Lphi)*cos(Ltheta);
+      L[1]=Ldist*cos(Lphi)*sin(Ltheta);
+      L[2]=Ldist*sin(Lphi);
+      vk[0]=-cos(phi)*cos(theta);
+      vk[1]=-cos(phi)*sin(theta);
+      vk[2]=-sin(phi);
+      vi[0]=-sin(theta);
+      vi[1]= cos(theta);
+      vi[2]= 0;
+      vj[0]=-sin(phi)*cos(theta);
+      vj[1]=-sin(phi)*sin(theta);
+      vj[2]=cos(phi);
+      vt[0]=focal*vk[0];
+      vt[1]=focal*vk[1];
+      vt[2]=focal*vk[2];
+      frm=numframes;
+      time=klock();
+   }
+   
+   r=0;g=0;b=0;//Initially no light (we will add light as stepping forward)
+   
+    
+   // Ray tracing. No refraction cause it needs recursion. This is difficult in (x,y...) mode because
+   //of non safe multithreading (MT): returning multiple values (needed for vectors) implies declaring
+   //them as static. Then if you use MT, the threads will try to write the same variables at the
+   //same time => snow, interlock...
+   
+   //generates ray direction and transforms it from screen to world coordinates
+   v0=x*vi[0]+y*vj[0]+vt[0];
+   v1=x*vi[1]+y*vj[1]+vt[1];
+   v2=x*vi[2]+y*vj[2]+vt[2];
+   
+   //Normalize it
+   d1=1/sqrt(v0*v0+v1*v1+v2*v2);
+   v0*=d1;v1*=d1;v2*=d1;
+
+   //ray direction goes through the current screen pixel
+   //Ray origin is the eye
+   ox=O[0];oy=O[1];oz=O[2];
+   vx=v0;vy=v1;vz=v2;//We may need the original ray's origin and direction
+   
+   riter=maxreflextions+1;//number of iteration. The first is from the eye. next ones are relections
+   Lmul=1;
+   nohit=1;
+   do{
+      //Intersect with bounding volume
+      if(bounding){//Bounding sph with radius bradius
+         bp=vx*Ox+vy*Oy+vz*Oz;
+         oo=ox*ox+oy*oy+oz*oz;
+         c=oo-bradius*bradius;
+         Sd=bp*bp-c;//Delta
+         if (Sd<0) break;
+         Sd=sqrt(Sd);
+         dmin=-bp-Sd;dmax=-bp+Sd;
+      }else{//Bounding cube with "radius" bradius
+         a0=1/Vx;a1=-(bradius+Ox)*a0;a0*=bradius-Ox;
+         dmin=min(a0,a1);dmax=max(a0,a1);
+         a0=1/Vy;a1=-(bradius+Oy)*a0;a0*=bradius-Oy;
+         dmin=max(dmin,min(a0,a1));dmax=min(dmax,max(a0,a1));
+         a0=1/Vz;a1=-(bradius+Oz)*a0;a0*=bradius-Oz;
+         dmin=max(dmin,min(a0,a1));dmax=min(dmax,max(a0,a1));
+      }
+   
+      //cliping
+      if(dmin>=dmax || dmax<0) break;
+      dmin=max(0,dmin);
+  
+      ox=ox+dmin*vx;oy=oy+dmin*vy;oz=oz+dmin*vz;
+      vx=(dmax-dmin)*vx;vy=(dmax-dmin)*vy;vz=(dmax-dmin)*vz;   
+      
+      //find next intersection
+      t=nextroot(ox,oy,oz,vx,vy,vz,threshold,maxstep/(dmax-dmin),errmax,maxiter);
+      if(testing) goto number;
+
+      if(t>=1)  break;
+      nohit=0;
+      
+      //shade it
+
+      //gradient vector
+      x=ox+t*vx;y=oy+t*vy;z=oz+t*vz;
+      vs=surf(x,y,z);
+      dsx=ieps*(surf(x+eps,y,z)-vs);
+      dsy=ieps*(surf(x,y+eps,z)-vs);
+      dsz=ieps*(surf(x,y,z+eps)-vs);
+   
+      //normalize the gradient vector
+      imod=1/sqrt(dsx^2+dsy^2+dsz^2);
+      dsx*=imod;dsy*=imod;dsz*=imod;
+            
+      //Normalize incident vector
+      imod=1/sqrt(vx*vx+vy*vy+vz*vz);
+      vx*=imod;vy*=imod;vz*=imod;
+   
+      // The side of the surface is given by the sign of the value of the function definig it at the current point
+      side=sgn(vs);//-sgn(dsx*vx+dsy*vy+dsz*vz);//
+   
+      // Bias to let next rays escape the surface
+      bias=side*errmax*(imod+1)*20;
+      x+=bias*dsx;y+=bias*dsy;z+=bias*dsz;
+   
+      //Light vector
+      xl=L[0]-x;yl=L[1]-y;zl=L[2]-z;
+      
+      //Normalize Light vector
+      imod=1/sqrt(xl^2+yl^2+zl^2);
+      xl*=imod;yl*=imod;zl*=imod;
+      
+      // Cosine of the angle between normal & light direction
+      nldot=xl*dsx+yl*dsy+zl*dsz;
+   
+      //Reflection vector. Because normal and incident vectors are already normalized this one also is!
+      nv=dsx*vx+dsy*vy+dsz*vz;
+      rx=vx-2*nv*dsx;ry=vy-2*nv*dsy;rz=vz-2*nv*dsz;
+      rl=rx*xl+ry*yl+rz*zl;// Cosine of the angle between reflection & light directions
+   
+      //Shadows
+      if(shadows)
+      if(nldot*side>0){
+         dmax=NextExit(x,y,z,xl,yl,zl);
+         vx=dmax*xl;vy=dmax*yl;vz=dmax*zl;
+         t=nextroot(x,y,z,vx,vy,vz,threshold,maxstep,errmax,maxiter);
+         if (t>0.999) t=1;else t=0;
+         nldot*=t;
+         rl*=t;
+      }else rl=0;
+   
+      //Shading calculations
+      dj=side*nldot;dj=max(dj,0);
+      rl=max(rl,0);rl=rl^shine;
+      
+      if(Shading==1){//Color depends on the direction of reflection vector.Not correct but Cool!
+         dj=0.55*dj+0.2;
+         r1=(dj*(abs(rx)+0.4)+rl)*256; g1=(dj*(abs(ry)+0.4)+rl)*256; b1=(dj*(abs(rz)+0.4)+rl)*256;
+      } else if(Shading==2){//Constant Color better with shadows and reflexions
+         if(side<0){r1=bCol[0];g1=bCol[1];b1=bCol[2];}
+         else{r1=fCol[0];g1=fCol[1];b1=fCol[2];}
+         rl*=150;
+         dj=0.6*dj+0.2;
+         r1*=dj;g1*=dj;b1*=dj;
+         r1+=rl;g1+=rl;b1+=rl;
+      } else {//Color depends on the direction of normal vector. Cool also
+         dj=0.55*dj+0.2;
+         //dj*=0.5;
+         //r1=(dj+0.4*abs(dsx))*256; g1=(dj+0.4*abs(dsy))*256; b1=(dj+0.4*abs(dsz))*256;
+         r1=(dj*(abs(dsx)+0.4)+rl)*256; g1=(dj*(abs(dsy)+0.4)+rl)*256; b1=(dj*(abs(dsz)+0.4)+rl)*256;
+      }
+      
+      r+=Lmul*r1;g+=Lmul*g1;b+=Lmul*b1;//We add this iteration's light contribution
+   
+      //Next ray direction is the reflection vector
+      //Next ray origin is the current intersection with the surface
+      ox=x;oy=y;oz=z;
+      vx=rx;vy=ry;vz=rz;
+      
+      lmul*=rfactor;//We multiply by the reflexion coefficient. To do eventually: Fresnel term
+
+      riter--;
+      nohit=1;
+   } while(riter);
+
+   if(nohit) {//"sky's" light. To do eventually: cube map
+      k=(vz/sqrt(vx*vx+vy*vy+vz*vz)+1.5);
+      r+=k*Lmul*sCol[0];
+      g+=k*Lmul*sCol[1];
+      b+=k*Lmul*sCol[2];
+   }
+   
+   //To see the spotlight. a little bit annoying
+   if(showlight){
+      pv=L[0]*v0+L[1]*v1+L[2]*v2;
+      ov=O[0]*v0+O[1]*v1+O[2]*v2;
+      vv=v0*v0+v1*v1+v2*v2;
+      t=(pv-ov)/vv;
+      pv0=O[0]+t*v0-L[0];pv1=O[1]+t*v1-L[1];pv2=O[2]+t*v2-L[2];pv=pv0^2+pv1^2+pv2^2;
+      if(pv<0.1 && t>0){r+=255;g=+255;b=0;}
+   }
+      
+   //The end
+   return;
+   
+   //To see iterations number: 
+   number:
+   //t*=1/100;
+   r=max(min((t*4-256),256),0);g=max(min((256-t*2),256),0);b=t;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//The computed implicit function
+surf(x,y,z){
+   //-labs(x,y,z-1);
+   //Dervish(x,y,z);//for example.
+   //r=sqrt(x*x+y*y);param1*sin(param2*r+time)/(r*r+1)-z;//Another example
+   //fabric(x,y,z,param1)
+   //param1+x*x+y*y-z*z+param3*sin(param2*x)*sin(param2*y)
+   k=sphere(x,y,z,param2);
+   d=param1/sqrt(x*x+y*y+z*z);x*=d;y*=d;z*=d;
+   k+param4*sin(param3*Barth(x,y,z)-param5*time)
+}
+fabric(x,y,z,size){
+   z+=1.5*noise(x*0.25,y*0.25);
+   x*=size;y*=size;z*=size;
+   0.6-(thread(x+0.5,y+0.5,z)+thread(y,x,z))
+}
+thread(x,y,z){
+   z+=0.2*sin(pi*y)*cos(pi*x);
+   r=1/(1+(2*pi*z)^2);
+   r1=0.5*(cos(2*pi*x)+cos(2*pi*z));
+   r*r1
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// utility functions to use for blending
+Lerp(a,b,t){// Linear interpolation of a & b by t
+   return a*t+(1-t)*b;
+}
+Cerp(a,b,t){// Cubic interpolation of a & b by t
+   return a*t^3+(1-t)^3*b;
+}
+RFunc(a,b,t){
+   t1=1/(1+t);t2=sqrt((a*a+b*b-2*t*a*b));
+   mu=t1*(a+b-t2);nu=t1*(a+b+t2);
+   a*mu+b*nu
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//Linear things
+absolutely(x,y,z){
+   z-abs(x)*abs(y)
+}
+
+Cube(x,y,z,r){
+   max(max(-r-x,max(-r-y,-r-z)),max(x-r,max(y-r,z-r)))
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//Algebraic equations
+
+//   Quadratic: well you don't really want to use this program for those.
+//   direct methods are fare more effective up to degree 3 & 4
+Sphere(x,y,z,r){
+   x^2+y^2+z^2-r^2
+}
+
+Cylinder(x,y,r){
+   x*x+y*y-r;
+}
+
+Cone(x,y,z,a){
+   x*x+y*y-a*a*z*z;
+}
+
+Whitney(x,y,z){
+   x^2*z-y^2
+}
+
+//   Cubics
+FlipFlap(x,y,z){
+   x*x+y*y+z*x*y
+}
+
+DingDong(x,y,z){
+   (x^2+y^2)+z*(z^2-1)-0.385
+}
+
+CrossCap2(x,y,z){
+   x^2*y - z^2
+}
+
+CayleyCubic(x,y,z){
+   4*(x^2+y^2+z^2) + 16*x*y*z - 1
+}
+
+CayleyCubic2(x,y,z){
+   -5(x^2*y+x^2*z+y^2*x+y^2*z+z^2*y+z^2*x)+2*(x*y+x*z+y*z)
+}
+
+ThreePlanes(x,y,z){
+   x*y*z
+}
+
+Folium(x,y,z){
+   y^2-3*x*y^2+z^2-3*x*z^2+2*x^2
+}
+
+Monkey(x,y,z){
+   z-x*(x^2-3*y^2)
+}
+
+//   Quartics
+Piriform(x,y,z){
+   x^4-x^3+y^2+z^2
+}
+
+CrossCap(x,y,z){
+   4*x^2*(x^2+y^2+z^2+z)+y^2*(y^2+z^2-1)
+}
+
+SquaredOffSphere(x,y,z){
+   x^4 + y^4 + z^4 - 1
+}
+
+CubeSphere4(x,y,z){
+   (x^4 + y^4 + z^4 - 5*(x^2 + y^2 + z^2 ) + 11.8)
+}
+
+PiriformTeardrop(x,y,z){
+   x^4-x^3+y^2+z^2
+}
+BohemianDome(x,y,z){
+   -(-y^4-x^4-z^4+2*x^2*z^2+4*y^2-2*x^2*y^2-2*y^2*z^2)
+}
+
+Cassini(x,y,z){
+   x^4+y^4-z^4-0.5*x^2+0.5*y^2+2*x^2*y^2+0.0627
+}
+Chubs(x,y,z){
+   (x^4+y^4+z^4)-(x^2+y^2+z^2)+0.5
+}
+Devil(x,y,z){
+   x^4+2*x^2*z^2-0.36*x^2-y^4+0.25*y^2+z^4
+}
+KampyleOfEudoxus(x,y,z){
+   y^2+z^2-x^4+0.04*x^2
+}
+Q1Surface(x,y,z){
+   -(x^4+y^4+z^4-4*x^2-4*y^2*z^2-4*y^2-4*z^2*x^2-4*z^2-4*x^2*y^2+20.7846*x*y*z+1)
+}
+Torus(x,y,z){
+   x^4+y^4+z^4+2*x^2*y^2+2*x^2*z^2+2*y^2*z^2-1.06*x^2+0.9*y^2-1.06*z^2+0.2025
+}
+Mitchell(x,y,z){
+   4*(x^4+(y^2+z^2)^2)+17*x^2*(y^2+z^2)-20*(x^2+y^2+z^2)+17
+}
+//   Quintics
+Dervish(x,y,z){
+   z=-z;
+   c=sqrt(5-sqrt(5))/2;
+   r=(1+3*sqrt(5))/4;
+   q=(1-c*z)*(x^2+y^2-1+r*z^2)^2;
+   a=-(8/5)*(1+1/sqrt(5))*sqrt(5-sqrt(5));
+   h1=x-z;
+   h2=cos(2*Pi/5)*x-sin(2*Pi/5)*y-z;
+   h3=cos(4*Pi/5)*x-sin(4*Pi/5)*y-z;
+   h4=cos(6*Pi/5)*x-sin(6*Pi/5)*y-z;
+   h5=cos(8*Pi/5)*x-sin(8*Pi/5)*y-z;
+   FF=h1*h2*h3*h4*h5;
+   a*FF+q
+}
+
+Peninsula(x,y,z){
+   x^2+y^3+z^5
+}
+
+Kiss(x,y,z){
+   -(0.5*x^5+0.5*x^4-y^2-z^2)
+}
+
+GlobTeardrop(x,y,z){
+   -0.5*x^5+0.5*x^4-y^2-z^2
+}
+
+//   Sextics
+Klein(x,y,z){
+   (x^2+y^2+z^2+2*y-1)*((x^2+y^2+z^2-2*y-1)^2-8*z^2)+16*x*z*(x^2+y^2+z^2-2*y-1);
+}
+citrus(x,y,z){
+   x^2+z^2-4*y^3*(1-0.5*y)^3
+}
+Barth(x,y,z){
+   phi1=(1+sqrt(5))/2;phi2=phi1^2;
+   -(4*(phi2*x^2-y^2)*(phi2*y^2-z^2)*(phi2*z^2-x^2)-(1+2*phi1)*(x^2+y^2+z^2-1)^2)
+}
+
+T6(x){2*x^2*(3-4*x^2)^2-1;}//Tchebychev polynomial used by Chmutov6 ans C6 (they are level sets of the same equation!)
+Chmutov6(x,y,z){
+   T6(x)+T6(y)+T6(z)
+}
+C6Surface(x,y,z){
+   T6(x)+T6(y)+T6(z)+1
+}
+
+Hunt(x,y,z){
+   x*=x;y*=y;z*=z;
+   4*(x+y+z-13)^3+27*(3*x+y-4*z-12)^2
+}
+
+Heart(x,y,z){
+   (2*x^2+2*y^2+z^2-1)^3-(0.1*x^2+y^2)*z^3
+}
+
+Ouaw(x,y,z){
+   x^2*y^2-x*z^5-z^2
+}
+
+KusnerSchmitt(x,y,z){
+   x^2*y^2*z^2+3*x^2*y^2+3*x^2*z^2+9*x^2+3*y^2*z^2+9*y^2+9*z^2-32*x*y*z-5
+}
+
+Trifolia(x,y,z){
+   x^3+y^3+z^3+13*x^3*y^3+13*x^3*z^3+13*y^3*z^3-20*y*x^2-20*y*z^2-20*x*z^2
+}
+/////Septics//////////////////////////////////////////////////////////////////////////////////////
+labs(x,y,z){
+   alpha=-0.14010685;w=1;
+   a1 = -12/7*alpha^2 - 384/49*alpha - 8/7;
+   a2 = -32/7*alpha^2 + 24/49*alpha - 4;
+   a3 = -4*alpha^2 + 24/49*alpha - 4;
+   a4 = -8/7*alpha^2 + 8/49*alpha - 8/7;
+   a5 = 49*alpha^2 - 7*alpha + 50;
+   P = x*(x^6-3*7*x^4*y^2+5*7*x^2*y^4-7*y^6) + 7*z*((x^2+y^2)^3-2^3*z^2*(x^2+y^2)^2+2^4*z^4*(x^2+y^2)) - 2^6*z^7;
+   U = (z+a5*w)*(a1*z^3+a2*z^2*w+a3*z*w^2+a4*w^3+(z+w)*(x^2+y^2))^2;
+   S = P-U;
+}
+/////Octics///////////////////////////////////////////////////////////////////////////////////////
+X8(x,y,z){
+   v=64*(x*x-1)*(y*y-1)*((x+y)^2-2)*((x-y)^2-2);
+   v-=(-4*(1+sqrt(2))*(x^2+y^2)^2+(8*(2+sqrt(2))*z^2+2*(2+7*sqrt(2)))*(x^2+y^2)-16*z^4+8*(1-2*sqrt(2))*z^2-(1+12*sqrt(2)))^2;
+   -v
+}
+_X8(x,y,z){
+   v=64*(x*x-1)*(y*y-1)*((x+y)^2-2)*((x-y)^2-2);
+   v-=(-4*(1-sqrt(2))*(x^2+y^2)^2+(8*(2-sqrt(2))*z^2+2*(2-7*sqrt(2)))*(x^2+y^2)-16*z^4+8*(1+2*sqrt(2))*z^2-(1-12*sqrt(2)))^2;
+   -v
+}
+
+T8(x){x*=x; 1+x*32*(-1+x*(5+x*(-8+x*4)))}//Tchebychev polynomial used by Chmutov8 ans C8
+
+Chmutov8(x,y,z){
+   T8(x)+T8(y)+T8(z)
+}
+
+C8Surface(x,y,z){
+   T8(x)+T8(y)+T8(z)+1
+}
+
+//   Decics
+BarthDecic(x,y,z){// Barth's
+   w=1.6;
+   phi1=(1+sqrt(5))/2;
+   (8*(x^2-phi1^4*y^2)*(y^2-phi1^4*z^2)*(z^2-phi1^4*x^2)*(x^4+y^4+z^4-2*((x*y)^2+(x*z)^2+(y*z)^2))+(3+5*phi1)*(x^2+y^2+z^2-w^2)^2*(x^2+y^2+z^2-(2-phi1)*w^2)^2*w^2);
+}
+
+//   Dodecics
+Sarti12(x,y,z){
+   l1=x^4+y^4+z^4+1; l2=x^2*y^2+z^2;
+   l3=x^2*z^2+y^2;   l4=x^2+y^2*z^2; l5=x*y*z;
+   s10=l1*(l2*l3+l2*l4+l3*l4); s11=l1^2*(l2+l3+l4);
+   s12=l1*(l2^2+l3^2+l4^2);    s51=l5^2*(l2+l3+l4); s234=l2^3+l3^3+l4^3;
+   s23p=l2^2*l3+l2*l3^2;       s23m=l2^2*l3-l2*l3^2; 
+   s34p=l3^2*l4+l3*l4^2;       s34m=l3^2*l4-l3*l4^2; 
+   s42p=l4^2*l2+l4*l2^2;       s42m=l4^2*l2-l4*l2^2;
+   Q12=(x*x+y*y+z*z+1)^6;
+   S12=33*sqrt(5)*(s23m+s34m+s42m)+19*(s23p+s34p+s42p)+10*s234-14*s10+2*s11-6*s12-352*s51+336*l5^2*l1+48*l2*l3*l4;
+   22*Q12-243*S12
+}
+
+dodecube(x,y,z){
+   ((x^2+y^2-0.8^2)^2+(z^2-1)^2)*((y^2+z^2-0.8^2)^2+(x^2-1)^2)*((z^2+x^2-0.8^2)^2+(y^2-1)^2)-0.025
+}
+
+//   higher order
+//   Some are very slow to render
+
+Bretzel(x,y,z){// degree 24!
+   (x^2*(1.21-x^2)^2*(3.8-x^2)^3-10*y^2)^2+60*z^2-2
+}
+
+TN(x,n){// Tchebychev of degree N. To do: faster one (too many sines)
+   p=1;
+   for(k=1;k<n;k++)
+      p*=1+(x-1)*cheby[n][k];//1/(2*sin(k*pi/n)^2);
+   p*=n*n*(x-1);
+   p+1
+}
+ChmutovN(x,y,z,n) { TN(x,n)+TN(y,n)+TN(z,n) }
+
+CNSurface(x,y,z,n){ TN(x,n)+TN(y,n)+TN(z,n)+1 }
+
+NOffSphere(x,y,z,n){ abs(x)^n+abs(y)^n+abs(z)^n-1 }
+
+//julia(). mi:maximum_iterations. Order: 2^mi. 
+//Rendering it directly is difficult because of overflows and excessive iterations count.
+// That's why we use log()
+julia(x,y,z){
+   p0=y; p1=z; p2=x; p3=0;
+   jul0=param1;jul1=param2;jul2=0;jul3=0;//Can be changed
+   //DJ=getJuliaDist(p,juliac,4,10);
+   enum{mi=9};//Can be changed: Aliasing occures for higher values
+   i=0;z=0;
+   while(i<mi && z<2^54) {  
+      //qsqr(p,tmp);qadd(tmp,c,p);==> q<-q^2+c
+      {
+         tmp0=p0*p0-(p1*p1+p2*p2+p3*p3);
+         tmp1=p0*p1*2;
+         tmp2=p0*p2*2;
+         tmp3=p0*p3*2;
+         p0=tmp0+jul0;p1=tmp1+jul1;
+         p2=tmp2+jul2;p3=tmp3+jul3;
+      }     
+      z=p0*p0+p1*p1+p2*p2+p3*p3;
+      i++;
+   }
+   //now the c parameter (jul0...) is negligible.
+   z=log(z);
+   z*=2^(mi-i);
+   z-1
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//Nonlinear
+
+Sherk(x,y,z){ exp(2*z)*cos(2*y)-cos(2*x) }
+
+Blobby(x,y,z){ x^2+y^2+z^2+sin(4*x)-cos(4*y)+sin(4*z)-1 }
+
+Meatball(x,y,z,p1,p2){// Ken's meatball revisited
+   a = 0; ff = 6*p1; h = p2;
+   for(i=0;i<2;i++)
+   {
+      aa = noise3d(x*ff,y*ff,z*ff)*h;
+      a -= aa; ff *= .38; h /= .38;
+   }
+   -a + (x*x + y*y + z*z - .9);
+}
+
+twistcube(x,y,z,angle,h){//First we transform the input to twist the cube
+   c=cos(z*angle);s=sin(z*angle);
+   x1=x*c-y*s;y1=x*s+y*c;cube(x1,y1*4,z*h,1);
+}
+
+SuperEllipsoid(x,y,z,l,m,n){
+   abs(x)^l+abs(y)^m+abs(z)^n-1
+}
+///////////////////////////////////////////////////////////////////////////////////////////////
+//computes x,y and z then calls surf() then scales the result if required by the user
+//Surf() is just after the main function
+f(t,ox,oy,oz,vx,vy,vz){
+   x=ox+t*vx;y=oy+t*vy;z=oz+t*vz;
+   y=Surf(x,y,z);
+   if(sclit) y=log(abs(y)+1)*sgn(y);//*(abs(t)^2+1)*0.1;//Use with care!
+   y
+}
+
+//Traversal algorithm
+// Return approximation of the first root (if it doesn't miss it)
+// The approximation of the root is always less than the actual root.
+nextroot(ox,oy,oz,vx,vy,vz,th,smax,errmax,itermax){
+   //tweeks: theta (th), smax, errmax, itermax
+   eps=2^-16;ieps=2^16;// epsilons for derivatives calculation
+   t=0;//will become the approximation of the root
+   n=0;//number of iterations
+   as=0;//previous step size
+   s=smax;//current step size
+   //Compute the value of the implicit function
+   y0=f(t,ox,oy,oz,vx,vy,vz);
+   //chek if we have already reached the root
+   if(abs(y0)<errmax) return n;
+   //Derivative
+   ady=f(t+eps,ox,oy,oz,vx,vy,vz);ady=ieps*(ady-y0);//df(t)
+   while (t<1){//loop while t is inside the search interval
+      //Value and derivative at t+s
+      y1=f(t+s,ox,oy,oz,vx,vy,vz);
+      dy=f(t+s+eps,ox,oy,oz,vx,vy,vz);dy=ieps*(dy-y1);//df(t+s);
+      //Compute a quadrilateral that -we hope- contains the function in [s,s+t]
+      yi1=y0+ady*s;yi0=y1-dy*s;
+      ya1=max(yi1,y1);ya0=max(yi0,y0);
+      yi1=min(yi1,y1);yi0=min(yi0,y0);
+      aa=0.5*(ya1+ya0);ai=0.5*(yi1+yi0);
+      //If the quadrilateral cuts the 'y=0' axis or is big enougth we subdivide else t=t+s
+      if(abs(aa-ai)<abs(0.5*ai)  && yi1*ya0>0 && yi0*ya1>0){
+         t+=s;
+         if(abs(y1)<errmax || n>itermax || s<errmax) break;//we have reached the root or gone out of allowed number of ierations
+         //Next step size estimation
+         //upper bound
+         //smax1=th*(max(abs(y0),abs(y1)))/(abs(ady-dy)+1);
+         //smax1=max(1,(abs(y0-y1)+1)/(abs(ady-dy)+1));smax1=min(smax1,1.5*s);
+         smax1=max(smax,th*(abs(y0-y1))/(abs(ady-dy)+1));//The best I could find
+         //smax1=0.5*min((abs(y1)+1)/(abs(dy)+1),(abs(y0)+1)/(abs(ady)+1));
+         //'careful' estimation. Seems strange but gives less overall iterations number.
+         if(s==as) 
+            s*=2; 
+         else as=s;
+         s=min(s,smax1);//clamp to the bound
+         //
+         y0=y1;ady=dy;
+      }else {as=s;s*=1/2;}// here we subdivide
+      n++;
+   }
+   if (testing) return n;
+   return t;
+}
+
+//Exit from the bounding volume. used for secondary rays
+// We only need dmax and we are inside the box so dmin is 0
+NextExit(o0,o1,o2,v0,v1,v2){
+   if(bounding){//intersect with bounding sph with radius bradius
+      bp=v0*O0+v1*O1+v2*O2;oo=o0^2+o1^2+o2^2;
+      c=OO-bradius*bradius;
+      Sd=bp*bp-c;//Delta
+      if (Sd<0) return 0;
+      Sd=sqrt(Sd);
+      dmax=-bp+Sd;
+   }else{//intersect with bounding cube with "radius" bradius
+      a0=1/V0;a1=-(bradius+O0)*a0;a0*=bradius-O0;
+      dmax=max(a0,a1);
+      a0=1/V1;a1=-(bradius+O1)*a0;a0*=bradius-O1;
+      dmax=min(dmax,max(a0,a1));
+      a0=1/V2;a1=-(bradius+O2)*a0;a0*=bradius-O2;
+      dmax=min(dmax,max(a0,a1));
+   }
+   dmax
+}

@@ -1,0 +1,114 @@
+(x,y){
+   p=3;q=16;//q ne doit pes etre egal a zero!
+   static x0,y0;
+   static las,tas,lbs,tbs,rs;
+   static mat[2][2],imat[2][2];
+   static xa,ya,xb,yb,xab,yab,rsa,rsb,rsab;
+   static kkk=1;
+   if(kkk){
+      kkk=0;
+      vx=-p+q*0.5;
+      vy=q*sqrt(3)/2;
+      vd=1/sqrt(vx*vx+vy*vy);
+      scl=2*pi*vd;
+      s=vx*vd;c=vy*vd;
+      x0=c*scl;y0=s*scl;
+      solve(x0,y0,p,q,las,tas,lbs,tbs,rs);
+      //rs-=0.01;
+      xa=exp(las)*cos(tas);ya=exp(las)*sin(tas);rsa=rs*exp(las);
+      xb=exp(lbs)*cos(tbs);yb=exp(lbs)*sin(tbs);rsb=rs*exp(lbs);
+      xab=exp(las+lbs)*cos(tas+tbs);yab=exp(las+lbs)*sin(tas+tbs);rsab=rs*exp(las+lbs);
+      mat[0][0]=las;mat[0][1]=lbs;
+      mat[1][0]=tas;mat[1][1]=tbs;
+      s=1/(las*tbs-lbs*tas);
+      imat[0][0]=s*tbs;imat[0][1]=-s*lbs;
+      imat[1][0]=-s*tas;imat[1][1]=s*las;
+   }
+   //transformer vers le plan log/theta
+   r=sqrt(x*x+y*y);y=atan2(y,x);x=log(r);
+   //transformer dans le rpere a,b
+   x1=imat[0][0]*x+imat[0][1]*y;
+   y =imat[1][0]*x+imat[1][1]*y;x=x1;
+   //transformer vers le domaine fondamental
+   ix=floor(x);iy=floor(y);
+   x=x-floor(x);y=y-floor(y);
+   //retourner vers le plan log/theta
+   x1=mat[0][0]*x+mat[0][1]*y;
+   y =mat[1][0]*x+mat[1][1]*y;x=x1;
+   //retourner au plan x,y
+   r=exp(x);
+   x=r*cos(y);y=r*sin(y);
+   //dessiner les cercles
+   hit=0;xp=0;yp=0;zp=0;
+   colx0=(ix%p)/p+0.1;colx1=(ix+1)%p/p+0.1;
+   coly0=(iy%q)/q+0.1;coly1=(iy+1)%q/q+0.1;
+   if((x-1)^2+(y)^2<rs^2) {hit=1;xp=0;yp=0;zp=0;}
+   if((x-xa)^2+(y-ya)^2<rsa^2) {hit=1;xp=1;yp=0;zp=1;}
+   if((x-xb)^2+(y-yb)^2<rsb^2) {hit=1;xp=0;yp=1;zp=1;}
+   if((x-xab)^2+(y-yab)^2<rsab^2) {hit=1;xp=1;yp=1;zp=2;}
+   //hit*(((iy+yp)%q)/q+0.1)
+   //hit*(((ix+xp)%p)/p+0.1)
+   hit*(((iy+ix+zp)%(q-p))/(q-p)+0.1)
+}
+f0(l,t){
+   l=exp(l);
+   t=cos(t);
+   (l^2-2*l*t+1)/(l+1)^2
+}
+f1(l0,t0,l1,t1){
+   l0=exp(l0);
+   l1=exp(l1);
+   t=cos(t0-t1);
+   (l0^2-2*l0*l1*t+l1^2)/(l0+l1)^2
+}
+cfa(la,ta,p,q,fa[2]){//compute function
+   lb=la*p/q;tb=(ta*p+2*pi)/q;
+   v0=f0(la,ta);
+   v1=f0(lb,tb);
+   v2=f1(la,ta,lb,tb);
+   fa[0]=v0-v1;
+   fa[1]=v1-v2;
+}
+solve(la,ta,p,q,&las,&tas,&lbs,&tbs,&rs){
+   auto J[2][2];
+   auto Ji[2][2];
+   auto a[2],fa[2];
+   //initializer a_n
+   a[0]=la;a[1]=ta;
+   for(i=0;i<3;i++){//algo de Newton Raphson 
+      //calculer fa_n
+      cfa(a[0],a[1],p,q,fa);
+      //calculer jacobien de fa
+      prepmat0(a[0],a[1],p,q,J);
+      //trouver l'inverse de J
+         //determinant;
+         det=J[0][0]*J[1][1]-J[0][1]*J[1][0];
+         idet=1/det;//il faudra faire attention au cas ou det==0
+         //inverse
+         Ji[0][0]=J[1][1]*idet;Ji[0][1]=-J[0][1]*idet;
+         Ji[1][0]=-J[1][0]*idet;Ji[1][1]=J[0][0]*idet;
+      //nouveau a
+      a[0]-=(ji[0][0]*fa[0]+ji[0][1]*fa[1]);
+      a[1]-=(ji[1][0]*fa[0]+ji[1][1]*fa[1]);
+   }
+   las=a[0];tas=a[1];
+   lbs=las*p/q;tbs=(tas*p+2*pi)/q;
+   rs=sqrt(f0(las,tas));
+}
+prepmat0(la,ta,p,q,m[2][2]){//compute jacobian
+   auto m0[3][2];
+   lb=la*p/q;tb=(ta*p+2*pi)/q;
+   ra=exp(la);rb=exp(lb);k=p/q;
+   c0=2*ra/(ra+1)^2;
+   c1=2*k*rb/(rb+1)^2;
+   c2=2*(1-k)*ra*rb/(ra+rb)^2;
+   m0[0][0]=c0*(1+cos(ta))*(ra-1)/(ra+1);
+   m0[0][1]=c0*sin(ta);
+   m0[1][0]=c1*(1+cos(tb))*(rb-1)/(rb+1);
+   m0[1][1]=c1*sin(tb);
+   m0[2][0]=c2*(1+cos(ta-tb))*(ra-rb)/(ra+rb);
+   m0[2][1]=c2*sin(ta-tb);
+   
+   m[0][0]=m0[0][0]-m0[1][0];m[0][1]=m0[0][1]-m0[1][1];
+   m[1][0]=m0[1][0]-m0[2][0];m[1][1]=m0[1][1]-m0[2][1];
+}

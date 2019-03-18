@@ -1,0 +1,231 @@
+static mtab[1024][2][2][2];
+static zf=400;
+static identity=1023,temptab=1000;
+(){
+   static x,y;
+   if(numframes==0){
+      //set identity matrix
+      mtab[identity][0][0][0]=1;mtab[identity][0][0][1]=0;
+      mtab[identity][0][1][0]=0;mtab[identity][0][1][1]=0;
+      mtab[identity][1][0][0]=0;mtab[identity][1][0][1]=0;
+      mtab[identity][1][1][0]=1;mtab[identity][1][1][1]=0;
+      
+      settrans(1.9,-0.07,2.5,0.);//sets the 4 first entries of mtab[...]->a,b,A,B (A=a^-1)
+      cls(0);
+   }
+   
+   //cls(0);
+   setcol(0,255,0);doit(20);
+}
+/////////////////////////////////////////////////////////////////////////////////////////////
+static resol=0.0625;
+static domoveto=0;
+static lx,ly;
+doit(n){
+   mulmat(0,1,4);
+   x=-1;y=0;x0=1;y0=1;
+   lx=zf*x+0.5*xres; ly=0.5*yres-zf*y;
+   moveto(lx,ly);
+   if(lx>=0) domoveto=0; else domoveto=1;
+   m=n+100;
+   for(j=0;j<4;j++){
+      i=(j+0)%4;
+      mtab[m][0][0][0]=mtab[i][0][0][0]; mtab[m][0][0][1]=mtab[i][0][0][1];
+      mtab[m][0][1][0]=mtab[i][0][1][0]; mtab[m][0][1][1]=mtab[i][0][1][1];
+      mtab[m][1][0][0]=mtab[i][1][0][0]; mtab[m][1][0][1]=mtab[i][1][0][1];
+      mtab[m][1][1][0]=mtab[i][1][1][0]; mtab[m][1][1][1]=mtab[i][1][1][1];
+      nextlevel(n,i);
+   }
+   lineto(zf*x+0.5*xres,0.5*yres-zf*y);
+}
+nextlevel(n,ip){
+   //draw current isometric circle
+   i=n+100;
+   dr=mtab[i][1][1][0]; di=mtab[i][1][1][1];
+   cr=mtab[i][1][0][0]; ci=mtab[i][1][0][1];
+   br=mtab[i][0][1][0]; bi=mtab[i][0][1][1];
+   ar=mtab[i][0][0][0]; ai=mtab[i][0][0][1];
+   r=1/sqrt(cr^2+ci^2);
+   
+   
+   cinv(dr,di);
+   cmul(br,bi,dr,di,cr,ci);
+   
+   sx=zf*cr+0.5*xres; sy=0.5*yres-zf*ci;//screen space coordinates and radius
+   sr=sqrt((lx-sx)^2+(ly-sy)^2);
+   lx=sx; ly=sy;
+   if(sr<resol) {
+      if(domoveto==1) {moveto(sx,sy); domoveto=0;} else lineto(sx,sy);
+      //clip
+      return;
+   }
+   //if(sr>10) {drawsph(sx,sy,-sr); }
+   //sr=zf*r;
+   if(sx+sr<0 || sy+sr<0 || sx-sr>xres || sy-sr>yres) {domoveto=1; return;}
+   
+   if(n==0) return;
+   
+   //recurse
+   for(i=-1; i<2; i++){
+      k=(ip+i)%4;
+      mulmat(n+100,k,n+99);
+      nextlevel(n-1,k);
+   }
+}
+/////////////////////////////////////////////////////////////////////////////////////////////
+mobi(&x,&y,i){
+   mobius(x,y,x,y,mtab[i][0][0][0],mtab[i][0][0][1],
+                  mtab[i][0][1][0],mtab[i][0][1][1],
+                  mtab[i][1][0][0],mtab[i][1][0][1],
+                  mtab[i][1][1][0],mtab[i][1][1][1]);
+}
+mobius(x,y,&xr,&yr,ar,ai,br,bi,cr,ci,dr,di){
+   x1=x*ar-y*ai; y1=x*ai+y*ar;
+   x1+=br; y1+=bi;
+   x2=x*cr-y*ci; y2=x*ci+y*cr;
+   x2+=dr; y2+=di;
+   n2=1/(x2*x2+y2*y2);
+   y2=-y2;
+   xr=x1*x2-y1*y2; yr=x1*y2+y1*x2;
+   xr*=n2; yr*=n2;
+}
+settrans(tar,tai,tbr,tbi){
+   //compute tab
+   tar2=tar^2-tai^2; tai2=2*tar*tai;
+   tbr2=tbr^2-tbi^2; tbi2=2*tbr*tbi;
+   ppr=tar2*tbr2-tai2*tbi2; ppi=tar2*tbi2+tai2*tbr2;
+   sr=tar2+tbr2; si=tai2+tbi2;
+   sr*=-4; si*=-4;
+   sr+=ppr; si+=ppi;
+   csqrt(&sr,&si);
+   tabr=tar*tbr-tai*tbi; tabi=tar*tbi+tai*tbr;
+   tabr+=sr; tabi+=si;
+   tabr*=0.5; tabi*=0.5;
+   //At this point we have tab
+   
+   //compute z0
+   tabm2r=tabr-2; tabm2i=tabi;
+   numr=tabm2r*tbr-tabm2i*tbi; numi=tabm2r*tbi+tabm2i*tbr;
+   denr=tbr*tabr-tbi*tabi; deni=tbr*tabi+tbi*tabr;
+   denr-=2*tar; deni-=2*tai;
+   denr-=2*tabi; deni+=2*tabr;
+   cinv(denr,deni);
+   z0r=numr*denr-numi*deni; z0i=numr*deni+numi*denr;
+   iz0r=z0r;iz0i=z0i; cinv(iz0r,iz0i);
+   //
+   
+   //compute matrix b
+   b00r=0.5*tbr; b00i=0.5*tbi-1; b01r=0.5*tbr; b01i=0.5*tbi;
+   b10r=0.5*tbr; b10i=0.5*tbi; b11r=0.5*tbr; b11i=0.5*tbi+1;
+   //compute matrix B=b^-1 (the determinant of b is 1)
+   ib00r=b11r; ib00i=b11i; ib01r=-b01r; ib01i=-b01i;
+   ib10r=-b10r; ib10i=-b10i; ib11r=b00r; ib11i=b00i;
+   //compute matrix a
+   a00r=0.5*tabr; a00i=0.5*tabi; a01r=0.5*tabr-1; a01i=0.5*tabi;
+   a10r=0.5*tabr+1; a10i=0.5*tabi; a11r=0.5*tabr; a11i=0.5*tabi;
+   cmul(a01r,a01i,iz0r,iz0i,a01r,a01i);
+   cmul(a10r,a10i,z0r,z0i,a10r,a10i);
+   //a:=a*B
+   ta00r=a00r; ta00i=a00i; ta01r=a01r; ta01i=a01i;
+   ta10r=a10r; ta10i=a10i; ta11r=a11r; ta11i=a11i;
+   tr=0;ti=0;
+   cmul(ta00r,ta00i,ib00r,ib00i,a00r,a00i);
+   cmul(ta01r,ta01i,ib10r,ib10i,tr,ti);a00r+=tr;a00i+=ti;
+   cmul(ta00r,ta00i,ib01r,ib01i,a01r,a01i);
+   cmul(ta01r,ta01i,ib11r,ib11i,tr,ti);a01r+=tr;a01i+=ti;
+   cmul(ta10r,ta10i,ib00r,ib00i,a10r,a10i);
+   cmul(ta11r,ta11i,ib10r,ib10i,tr,ti);a10r+=tr;a10i+=ti;
+   cmul(ta10r,ta10i,ib01r,ib01i,a11r,a11i);
+   cmul(ta11r,ta11i,ib11r,ib11i,tr,ti);a11r+=tr;a11i+=ti;
+   //compute matrix A=a^-1 (the determinant of b is 1)
+   ia00r=a11r; ia00i=a11i; ia01r=-a01r; ia01i=-a01i;
+   ia10r=-a10r; ia10i=-a10i; ia11r=a00r; ia11i=a00i;
+   ////////////////////////////////////////////////////
+   mtab[0][0][0][0]=a00r; mtab[0][0][0][1]=a00i;
+   mtab[0][0][1][0]=a01r; mtab[0][0][1][1]=a01i;
+   mtab[0][1][0][0]=a10r; mtab[0][1][0][1]=a10i;
+   mtab[0][1][1][0]=a11r; mtab[0][1][1][1]=a11i;
+   
+   mtab[2][0][0][0]=ia00r; mtab[2][0][0][1]=ia00i;
+   mtab[2][0][1][0]=ia01r; mtab[2][0][1][1]=ia01i;
+   mtab[2][1][0][0]=ia10r; mtab[2][1][0][1]=ia10i;
+   mtab[2][1][1][0]=ia11r; mtab[2][1][1][1]=ia11i;
+   
+   mtab[1][0][0][0]=b00r; mtab[1][0][0][1]=b00i;
+   mtab[1][0][1][0]=b01r; mtab[1][0][1][1]=b01i;
+   mtab[1][1][0][0]=b10r; mtab[1][1][0][1]=b10i;
+   mtab[1][1][1][0]=b11r; mtab[1][1][1][1]=b11i;
+   
+   mtab[3][0][0][0]=ib00r; mtab[3][0][0][1]=ib00i;
+   mtab[3][0][1][0]=ib01r; mtab[3][0][1][1]=ib01i;
+   mtab[3][1][0][0]=ib10r; mtab[3][1][0][1]=ib10i;
+   mtab[3][1][1][0]=ib11r; mtab[3][1][1][1]=ib11i;
+}
+drawfixedpt(i){
+   x0=0;y0=0;x1=0;y1=0;
+   fixedpt(i,x0,y0,x1,y1);
+   drawsph(zf*x0+0.5*xres,0.5*yres-zf*y0,5);
+   drawsph(zf*x1+0.5*xres,0.5*yres-zf*y1,5);
+}
+fixedpt(i,&x0,&y0,&x1,&y1){
+   ar=mtab[i][0][0][0];ai=mtab[i][0][0][1];
+   br=mtab[i][0][1][0];bi=mtab[i][0][1][1];
+   cr=mtab[i][1][0][0];ci=mtab[i][1][0][1];
+   dr=mtab[i][1][1][0];di=mtab[i][1][1][1];
+   //z=(az+b)/(cz+d)
+   //cz^2+(d-a)z-b=0
+   //D=(d-a)^2+4bc=(a+d)^2-4; because ad-bc=1
+   //z=((a-d)+-sqrt((a+d)^2-4))/(2*c)
+   ddr=ar+dr; ddi=ai+di; cmul(ddr,ddi,ddr,ddi,ddr,ddi);ddr-=4; csqrt(ddr,ddi);
+   x0=ar-dr;y0=ai-di;x1=x0;y1=y0;
+   x0-=ddr;y0-=ddi;x1+=ddr;y1+=ddi;
+   cr*=2;ci*=2;
+   cinv(cr,ci);
+   cmul(x0,y0,cr,ci,x0,y0);
+   cmul(x1,y1,cr,ci,x1,y1);
+}
+drwisocirc(i){
+   dr=mtab[i][1][1][0]; di=mtab[i][1][1][1];
+   cr=mtab[i][1][0][0]; ci=mtab[i][1][0][1];
+   r=1/sqrt(cr^2+ci^2);
+   cinv(cr,ci);
+   cmul(-dr,-di,cr,ci,cr,ci);
+   drawsph(zf*cr+0.5*xres,0.5*yres-zf*ci,-zf*r);
+   r
+}
+conjmul(a,b,c,d){//d=a*b*c
+   mulmat(a,b,temptab);
+   mulmat(temptab,c,d);
+}
+mulmat(i,j,k){//k=i*j
+   tr=0;ti=0;
+   cmul(mtab[i][0][0][0],mtab[i][0][0][1],mtab[j][0][0][0],mtab[j][0][0][1],mtab[k][0][0][0],mtab[k][0][0][1]);
+   cmul(mtab[i][0][1][0],mtab[i][0][1][1],mtab[j][1][0][0],mtab[j][1][0][1],tr,ti);
+   mtab[k][0][0][0]+=tr; mtab[k][0][0][1]+=ti;
+   
+   cmul(mtab[i][0][0][0],mtab[i][0][0][1],mtab[j][0][1][0],mtab[j][0][1][1],mtab[k][0][1][0],mtab[k][0][1][1]);
+   cmul(mtab[i][0][1][0],mtab[i][0][1][1],mtab[j][1][1][0],mtab[j][1][1][1],tr,ti);
+   mtab[k][0][1][0]+=tr; mtab[k][0][1][1]+=ti;
+   
+   cmul(mtab[i][1][0][0],mtab[i][1][0][1],mtab[j][0][0][0],mtab[j][0][0][1],mtab[k][1][0][0],mtab[k][1][0][1]);
+   cmul(mtab[i][1][1][0],mtab[i][1][1][1],mtab[j][1][0][0],mtab[j][1][0][1],tr,ti);
+   mtab[k][1][0][0]+=tr; mtab[k][1][0][1]+=ti;
+   
+   cmul(mtab[i][1][0][0],mtab[i][1][0][1],mtab[j][0][1][0],mtab[j][0][1][1],mtab[k][1][1][0],mtab[k][1][1][1]);
+   cmul(mtab[i][1][1][0],mtab[i][1][1][1],mtab[j][1][1][0],mtab[j][1][1][1],tr,ti);
+   mtab[k][1][1][0]+=tr; mtab[k][1][1][1]+=ti;
+}
+cmul(z0r,z0i,z1r,z1i,&zr,&zi){
+   z2r=z0r*z1r-z0i*z1i; z2i=z0r*z1i+z0i*z1r;
+   zr=z2r; zi=z2i;
+}
+csqrt(&sr,&si){
+   rs=(sr^2+si^2)^0.25;
+   ts=atan2(si,sr);
+   sr=rs*cos(0.5*ts); si=rs*sin(0.5*ts);
+}
+cinv(&sr,&si){
+   ir2=1/(sr^2+si^2);
+   sr=sr*ir2; si=-si*ir2;
+}
+

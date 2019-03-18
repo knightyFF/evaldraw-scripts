@@ -1,0 +1,153 @@
+enum{tsiz=256};
+enum{fxsiz=32,fysiz=64};
+(){
+   if(numframes==0){
+      cls(0);
+      setfont(fxsiz,fysiz,1);
+      moveto(0.5*(tsiz-6*fxsiz),0.5*(tsiz-fysiz));
+      printf("HELLO!");
+      drawsph(100,100,-50);
+      for(i=0;i<10;i++)setpix(rnd*tsiz,rnd*tsiz);
+      initptab();
+      for(i=0;i<2;i++) processFB();
+      
+      calcdist();
+   }
+   
+   mx=mousx;my=mousy;
+   
+   drawdist();
+   if(mx>=0 && mx<xres && my>=0 && my<yres)
+      drawcircle(mx,my);
+}
+
+static nptab[tsiz][tsiz][2];
+static dtab[tsiz][tsiz];
+#define MAX_NUM 2^22;
+drawcircle(x,y){
+   d=dtab[y][x];
+   setcol(0xff0000);
+   drawsph(x,y,-d);
+}
+initptab(){
+   r=0;g=0;b=0;
+   for(l=0;l<tsiz;l++)
+      for(c=0;c<tsiz;c++){
+         nptab[l][c][0]=MAX_NUM;
+         nptab[l][c][1]=MAX_NUM;
+      }
+   for(l=0;l<min(yres,tsiz);l++)
+      for(c=0;c<min(xres,tsiz);c++){
+         getpix(c,l,r,g,b);
+         v=((r+g+b)==0)*MAX_NUM;
+         nptab[l][c][0]=v;
+         nptab[l][c][1]=v;
+      }
+}
+drawdist(){
+   for(l=0;l<yres;l++)
+      for(c=0;c<xres;c++){
+         d=dtab[l][c];
+         d=25*d^0.5;//d=128*(sin(0.5*d)+1);//
+         setcol(d,d,d);
+         setpix(c,l);
+      }
+}
+calcdist(){
+   for(l=0;l<tsiz;l++)
+      for(c=0;c<tsiz;c++){
+         x=nptab[l][c][0];
+         y=nptab[l][c][1];
+         dtab[l][c]=sqrt(x*x+y*y)-0;
+      }
+}
+processFB(){
+   for(l=0;l<tsiz;l++){
+      for(c=0;c<tsiz;c++){
+         x0=nptab[l][c][0];y0=nptab[l][c][1];
+         x1=nptab[l][c-1][0]-1;y1=nptab[l][c-1][1];
+         x2=nptab[l-1][c][0];y2=nptab[l-1][c][1]-1;
+         //x3=nptab[l-1][c-1][0]-1;y3=nptab[l-1][c-1][1]-1;
+         d0=x0*x0+y0*y0;
+         d1=x1*x1+y1*y1;
+         d2=x2*x2+y2*y2;
+         //d3=x3*x3+y3*y3;
+         mi=min(d0,min(d1,d2));//mi=min(min(d0,d1),min(d2,d3));
+         if(mi==d1){
+            nptab[l][c][0]=x1;
+            nptab[l][c][1]=y1;
+         }else if(mi==d2){
+            nptab[l][c][0]=x2;
+            nptab[l][c][1]=y2;
+         }/*else if(mi==d3){
+            nptab[l][c][0]=x3;
+            nptab[l][c][1]=y3;
+         }*/
+      }
+      for(c=tsiz-1;c>-1;c--){
+         x0=nptab[l][c][0];y0=nptab[l][c][1];
+         x1=nptab[l][c+1][0]+1;y1=nptab[l][c+1][1];
+         x2=nptab[l+1][c][0];y2=nptab[l+1][c][1]+1;
+         //x3=nptab[l+1][c+1][0]+1;y3=nptab[l+1][c+1][1]+1;
+         d0=x0*x0+y0*y0;
+         d1=x1*x1+y1*y1;
+         d2=x2*x2+y2*y2;
+         //d3=x3*x3+y3*y3;
+         mi=min(d0,min(d1,d2));//mi=min(min(d0,d1),min(d2,d3));
+         if(mi==d1){
+            nptab[l][c][0]=x1;
+            nptab[l][c][1]=y1;
+         }else if(mi==d2){
+            nptab[l][c][0]=x2;
+            nptab[l][c][1]=y2;
+         }/*else if(mi==d3){
+            nptab[l][c][0]=x3;
+            nptab[l][c][1]=y3;
+         }*/
+      }
+   }
+   for(l=tsiz-1;l>-1;l--){
+      for(c=tsiz-1;c>-1;c--){
+         x0=nptab[l][c][0];y0=nptab[l][c][1];
+         x1=nptab[l][c+1][0]+1;y1=nptab[l][c+1][1];
+         x2=nptab[l+1][c][0];y2=nptab[l+1][c][1]+1;
+         //x3=nptab[l+1][c+1][0]+1;y3=nptab[l+1][c+1][1]+1;
+         d0=x0*x0+y0*y0;
+         d1=x1*x1+y1*y1;
+         d2=x2*x2+y2*y2;
+         //d3=x3*x3+y3*y3;
+         mi=min(d0,min(d1,d2));//mi=min(min(d0,d1),min(d2,d3));
+         if(mi==d1){
+            nptab[l][c][0]=x1;
+            nptab[l][c][1]=y1;
+         }else if(mi==d2){
+            nptab[l][c][0]=x2;
+            nptab[l][c][1]=y2;
+         }/*else if(mi==d3){
+            nptab[l][c][0]=x3;
+            nptab[l][c][1]=y3;
+         }*/
+      }
+      for(c=0;c<tsiz;c++){
+         x0=nptab[l][c][0];y0=nptab[l][c][1];
+         x1=nptab[l][c-1][0]-1;y1=nptab[l][c-1][1];
+         x2=nptab[l-1][c][0];y2=nptab[l-1][c][1]-1;
+         //x3=nptab[l-1][c-1][0]-1;y3=nptab[l-1][c-1][1]-1;
+         d0=x0*x0+y0*y0;
+         d1=x1*x1+y1*y1;
+         d2=x2*x2+y2*y2;
+         //d3=x3*x3+y3*y3;
+         mi=min(d0,min(d1,d2));//mi=min(min(d0,d1),min(d2,d3));
+         if(mi==d1){
+            nptab[l][c][0]=x1;
+            nptab[l][c][1]=y1;
+         }else if(mi==d2){
+            nptab[l][c][0]=x2;
+            nptab[l][c][1]=y2;
+         }/*else if(mi==d3){
+            nptab[l][c][0]=x3;
+            nptab[l][c][1]=y3;
+         }*/
+      }
+   }
+}

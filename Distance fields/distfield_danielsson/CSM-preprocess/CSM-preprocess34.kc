@@ -1,0 +1,138 @@
+//Cone step map generator
+//This is a simple version just for illustration of the idea
+//It somehow works like Danielsson's algorithm
+//It doesn't support periodic tiles as it is but this is quite eazy to do
+//I think there is lot of room for improvement and optimization
+//by: Nait Merzouk Abdelaziz
+
+enum {imax=1024};//max image size
+static lx,ly;//image size
+static smul=4*256,sminus=0;//just to control brightness while displaying the cone map
+()
+{
+   static hmap[imax][imax];//this is the height map
+   static cmap[imax][imax][3];//this map contains the current max slope and pointer to parent (for which the slope is maximal)
+   
+   if(numframes==0){
+      //load the height map
+      loadimg(hmap);
+      //initialise the cone map
+      initcmap(cmap);
+      //we do the passes from big to small scales.
+      //this is necessary because one pass cannot pass the hills (well if you don't understand it must be my fault)
+      for(j=0;j<2;j++){
+         
+         for(i=0;i<9;i++) onepass(cmap[imax][imax][3],hmap[imax][imax],2^i);
+         for(i=9;i>0;i--) onepass(cmap[imax][imax][3],hmap[imax][imax],2^i-1);
+         
+      }
+   }
+   smul=mousx*2;
+   sminus=mousy*0.001;
+   cls(0);
+   showcmap(cmap[imax][imax][3]);
+}
+#define MINSLOPE 0.0//-(2^100)
+//intialize the slope and pointers. I'm using absolute coordinates but one can use relative coordinates.
+initcmap(cmap[imax][imax][3]){
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         cmap[y][x][0]=x;
+         cmap[y][x][1]=y;
+         cmap[y][x][2]=MINSLOPE;
+      }
+}
+//slope from (x,y,h) to (x1,y1,h1)
+getslope(x,y,h,x1,y1,h1){
+   if(x==x1 && y==y1) return MINSLOPE;
+   dr=sqrt((x-x1)^2+(y-y1)^2);//max(abs(x-x1),abs(y-y1));//
+   dh=h-h1;
+   return max(MINSLOPE,dh/dr);//clamp to minimal allowed slope
+}
+copyCmap(cmapf[imax][imax][3],cmapt[imax][imax][3]){
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         cmapt[y][x][0]=cmapf[y][x][0];
+         cmapt[y][x][1]=cmapf[y][x][1];
+         cmapt[y][x][2]=cmapf[y][x][2];
+      }
+}
+//updates the slope and pointer to parent of (x,y) by comparing to the list begining at (x1,y1)
+reduce(x,y,x1,y1,cmapf[imax][imax][3],cmapt[imax][imax][3],hmap[imax][imax]){
+   cslope=cmapf[y][x][2];
+   do{
+      nslope=getslope(x,y,hmap[y][x],x1,y1,hmap[y1][x1]);
+      if(nslope>cslope){
+         cmapt[y][x][0]=x1;
+         cmapt[y][x][1]=y1;
+         cmapt[y][x][2]=nslope;
+         cslope=nslope;
+      }
+      x2=cmapf[y1][x1][0];y2=cmapf[y1][x1][1];
+      x1=x2;y1=y2;
+   }while(cmapf[y1][x1][0]!=x1 || cmapf[y1][x1][1]!=y1);
+}
+//sweep along +x, -x, +y then -y
+onepass(cmap[imax][imax][3],hmap[imax][imax],step){
+   static cmap1[imax][imax][3];
+   copyCmap(cmap,cmap1);
+   for(y=0; y<ly; y++){
+      for(x=step; x<lx; x+=1){
+         x1=x-step;y1=y;
+         reduce(x,y,x1,y1,cmap1,cmap,hmap);
+      }
+      for(x=lx-step-1; x>=0; x-=1){
+         x1=x+step;y1=y;
+         reduce(x,y,x1,y1,cmap1,cmap,hmap);
+      }
+   }
+   for(x=step; x<lx; x++){
+      for(y=0; y<ly; y+=1){
+         x1=x;y1=y-step;
+         reduce(x,y,x1,y1,cmap1,cmap,hmap);
+      }
+      for(y=ly-step-1; y>=0; y-=1){
+         x1=x;y1=y+step;
+         reduce(x,y,x1,y1,cmap1,cmap,hmap);
+      }
+   }
+}
+//misc
+loadimg(im[imax][imax])
+{
+   static r,g,b;
+   static im1[imax][imax];
+   getpicsiz(&lx,&ly);
+   if(lx>imax)lx=imax;if(ly>imax)ly=imax;
+   for(y=0;y<imax;y++)
+      for(x=0;x<imax;x++)im[y][x]=1;
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         z=pic(x,y,&r,&g,&b);
+         im1[y][x]=z*1/256;//*(r*0.3+0.55*g+0.15*b);
+      }
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         z=pic(x,y,&r,&g,&b);
+         im[y][x]=0.5*im1[y][x]+0.125*(im1[y-1][x]+im1[y+1][x]+im1[y][x-1]+im1[y][x+1]);//im1[y][x];//
+      }
+}
+showimg(im[imax][imax])
+{
+   for(y=0;y<ly;y++)
+      for(x=0;x<lx;x++){
+         r=im[y][x]*256;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+}
+showcmap(cmap[imax][imax][3]){
+   for(y=0; y<ly; y++){
+      for(x=0; x<lx; x++){
+         cslope=sqrt(cmap[y][x][2]);
+         r=(cslope-sminus)*smul;
+         setcol(r,r,r);
+         setpix(x,y);
+      }
+   }
+}
