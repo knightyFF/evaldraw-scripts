@@ -1,0 +1,26 @@
+static a[3]={0,1,0};
+static b[3]={1,0,0};
+static c[3]={-sqrt(3)/2,-0.5,sqrt(3)/4};
+(x,y,&r,&g,&b){
+   reduce(&x,&y);
+   
+      fold(x,y,c);
+      x=abs(x);
+      y=abs(y);
+      fold(x,y,c);
+
+   pic(mousx*x,mousx*y,&r,&g,&b);
+}
+reduce(&x,&y){
+   tile(x,1.5);
+   tile(y,sqrt(3)/2);
+}
+fold(&x,&y,p[3]){
+   t=x*p[0]+y*p[1]+p[2];
+   t=2*min(t,0);
+   x-=t*p[0];y-=t*p[1];
+}
+tile(&x,a){
+   x-=a;
+   x=abs(x-(2*floor(x*0.5/a)+1)*a);
+}

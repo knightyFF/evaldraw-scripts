@@ -1,0 +1,50 @@
+static maxiter=5;
+static bailout=100;
+static n=-1;
+static frm=-1;
+(x,y){
+   static mx,my,mr2;
+   if(frm<numframes){
+      frm=numframes;
+      //maxiter=floor(mousx*0.1);
+      //n=(mousx-0.5*xres)*0.005;
+      mx=(mousx-0.5*xres)*0.01;
+      my=(0.5*yres-mousy)*0.01;
+      mr2=iter(mx,my)^2;
+   }
+   if((x-mx)^2+(y-my)^2<mr2) return 0;
+   d=iter(x,y);
+   abs(d)^0.25
+}
+iter(x,y){
+   cx=x;cy=y;
+   dx=1;dy=0;
+   i=maxiter;
+   r2=x*x+y*y;
+   while(i>0 && r2<bailout){
+      dxx=2*(x*dx-y*dy)+1;
+      dy=2*(x*dy+y*dx);
+      dx=dxx;
+      xx=x*x+n*y*y+cx;
+      y=2*x*y+cy;
+      x=xx;
+      r2=x*x+y*y;
+      i--;
+   }
+   r=sqrt(r2);
+   dr=sqrt(dx*dx+dy*dy);
+   //if(r2>4) d=0.5*r*log(sqrt(r2-4))/dr; else d=0;*/
+   //if(r2>4) d=r2^(0.5^(maxiter-i+1))-1; else d=0;
+   //d^0.125
+   //i/maxiter
+   //d=1/2^(maxiter-i)*(log(r))+(1-2^(1/2^(maxiter)));
+   //d=0.5*(r-2)*log(r+1)/dr;
+   //d=r^(1/2^(maxiter-i))-2^(1/2^(maxiter-i));
+   d=0.5*r*(log(r)-2^(-i)*log(2))/dr;//r^(1/2^(maxiter-i));
+   //d=0.5*r*(log(r)-2^(-i-1)*log(bailout))/dr;
+   //d=0.5*r/dr*2^(maxiter-i)*(1-2^(1/2^(maxiter-i))/r^(1/2^(maxiter-i)));
+   //d=0.5*r/dr*2^(maxiter-i)*(1-2^(1/2^(maxiter))/r^(2/2^(maxiter-i)));
+   //d=0.5*r/dr*2^(maxiter-i)*(r^(1/2^(maxiter-i))-2^(2/2^(maxiter)))/r^(1/2^(maxiter-i));
+   //(maxiter-i)/maxiter
+   d
+}

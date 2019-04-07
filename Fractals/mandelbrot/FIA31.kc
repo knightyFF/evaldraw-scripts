@@ -1,0 +1,55 @@
+(x,y){
+   //setgrid(-2,1.5,2,-1.5);
+   //rr=sqrt(2)*4/xres;//1/2^8;//1/(2^(2*(log(mi)/log(2)-2)));//
+   //mi=1/rr;//ceil(2^(-log(rr)/log(2)));
+   //mi=100;
+   rr=sqrt(2)*2;
+   k=0;pk=0;r=0;dr=0;drr2=0;
+   /*while(rr>sqrt(2)*2^-4/xres){
+      mi=max(23,1/rr);
+      k=mandel(x,y,mi,rr,r,dr,drr2);
+      if(k>=0) break;
+      pk=-k;
+      rr*=0.5;
+   }*/
+   rr=2^-10;
+   0.5+mandel(x,y,max(17,1./rr),rr,r,dr,drr2);
+   //drr2 
+   //pk/1000
+}
+mandel(cx,cy,maxiter,rr0,&r,&dr,&drr2){
+   x=cx;y=cy;
+   dx=1;dy=0;
+   h=0;
+   dh=0;
+   r=sqrt(x*x+y*y);
+   dr=sqrt(dx^2+dy^2);
+   rr=rr0;rr1=rr0;
+   drr2=dh*rr0;
+   rr2=dr*rr0+h*rr0^2;
+   i=1;
+   if(r<rr2 && dr-drr2<0) return -i;
+   while(i<=maxiter && r-rr2<2){
+      
+      rr1=rr0+2*r*rr1+rr1^2;
+      
+      dh=2*(r*dh+dr^2+(dh+h)*dr*rr0+h*dh*rr0^2);
+      h=dr^2+(2*r+(2*dr+h*rr0)*rr0)*h;
+      
+      dxx=2*(dx*x-dy*y)+1;
+      dy=2*(dx*y+dy*x);dx=dxx;
+      
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;
+      i++;
+            
+      r=sqrt(x*x+y*y);
+      dr=sqrt(dx^2+dy^2);
+      rr2=dr*rr0+h*rr0^2;
+      drr2=dh*rr0;
+      if(r-rr2<0 && dr-drr2<0) return -i;
+   }
+   
+   (i<=maxiter)*0.5
+}

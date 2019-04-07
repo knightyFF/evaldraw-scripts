@@ -1,0 +1,307 @@
+//Use with evaldraw: http://advsys.net/ken/download.htm
+
+//This is just a proof of concept.
+//It's about using derivatives and scale space to filter the buddhaBrot.
+
+enum{resx=30*32,resy=30*32};//size of rendered picture
+
+//buffers: a (incomplete) scale pyramid.
+static buf[resx][resy][3];//buffer for the samples that are small xrt to pixel size
+static buf0[resx][resy][3];//buffer for the samples wich size is comparable to pixel size (scale 0)
+static buf1[resx*0.5][resy*0.5][3];//scale 1 (pixel size==2)
+static buf2[resx*0.25][resy*0.25][3];
+static buf3[resx*0.125][resy*0.125][3];
+static buf4[resx/16][resy/16][3];
+static buf5[resx/32][resy/32][3];//scale 5 (pixel size==32)
+
+static zoom=0.5;//zoom factor
+static zom;//inverse of the pixel size in param space. used in get pixelsize()
+static cx=0,cy=0;//center of rendered window in param space
+static n=1;//nbr of passes
+static npt=100000;//nbr of samples per pass
+static xd,yd,rx,ry,xr,yr;//window vars
+static bailoutRadius=16;
+
+//using Halton sequences reduces noise (wrt to number of samples) maybe also because it have better "resolution" than the built in rnd function; but is usually slower (memory caches misses?)
+#define USE_HALTON_SEQ
+
+static sampleRadiusScaleFactor=1;//values less than 1 give slightly more accurate render
+static sampleMinRadius=0.01;//values > 0 give smoother results but wash out deep iterations generated details. a value of 1 meanes a min radius of 0.5 pixel width in param space
+
+//main function
+(){
+   if(numframes==0){//initializations
+      cls(102580);
+      for(l=0;l<resy;l++) for(c=0;c<resx;c++){
+         buf[l][c][0]=0;buf[l][c][1]=0;buf[l][c][2]=0;
+      }
+      for(l=0;l<resy;l++) for(c=0;c<resx;c++){
+         buf0[l][c][0]=0;buf0[l][c][1]=0;buf0[l][c][2]=0;
+      }
+      for(l=0;l<resy*0.5;l++) for(c=0;c<resx*0.5;c++){
+         buf1[l][c][0]=0;buf1[l][c][1]=0;buf1[l][c][2]=0;
+      }
+      for(l=0;l<resy*0.25;l++) for(c=0;c<resx*0.25;c++){
+         buf2[l][c][0]=0;buf2[l][c][1]=0;buf2[l][c][2]=0;
+      }
+      for(l=0;l<resy*0.125;l++) for(c=0;c<resx*0.125;c++){
+         buf3[l][c][0]=0;buf3[l][c][1]=0;buf3[l][c][2]=0;
+      }
+      for(l=0;l<resy*1/16;l++) for(c=0;c<resx*1/16;c++){
+         buf4[l][c][0]=0;buf4[l][c][1]=0;buf4[l][c][2]=0;
+      }
+      for(l=0;l<resy*1/32;l++) for(c=0;c<resx*1/32;c++){
+         buf5[l][c][0]=0;buf5[l][c][1]=0;buf5[l][c][2]=0;
+      }
+      zom=zoom*resy*0.5;
+      xd=cx-1/zoom;xf=cx+1/zoom;rx=resx/(xf-xd);xr=0.*(xf-xd)/resx;
+      yd=cy+1/zoom;yf=cy-1/zoom;ry=resy/(yf-yd);yr=0.*(yf-yd)/resy;
+   }
+   
+   calcit(0,npt,100,800,50,250,0,100);
+   n+=npt;
+   drawit(0.0005*mousx*zoom*zoom*resx*resy/n,0.002*mousy);//drawit(0.07*zoom*zoom*resx*resy/n,0.75);
+   
+   setcol(0xffffff); moveto(0,0); printf("  %g Msample",n/1000000);
+}
+halton(index,base){//from wiki pseudo code (http://en.wikipedia.org/wiki/Halton_sequences)
+   result=0;
+   ib=1/base;
+   f=ib;
+   i=index;
+   while (i>0){
+      i1=i*ib;
+      i=floor(i1);
+      result+=f*(i1-i)*base;
+      f*=ib;
+   }
+   return result;
+}
+static index=0;
+rndx(){
+   halton(index,2)
+}
+rndy(){
+   index+=1;
+   halton(index,3)
+}
+calcit(index,nbrpt,miniterR,maxiterR,miniterG,maxiterG,miniterB,maxiterB){
+   de=0;
+   miniter=min(miniterR,min(miniterG,miniterB));
+   maxiter=max(maxiterR,max(maxiterG,maxiterB));
+   for(i=0;i<nbrpt;i++){
+#ifdef USE_HALTON_SEQ
+      x=(rndx()-0.5)*5;
+      y=(rndy()-0.5)*5;
+#else
+      x=(rnd-0.5)*5;
+      y=(rnd-0.5)*5;
+#endif
+      j=escape(x,y,x,y,maxiter,de);//de: distance estimate. It's used to initialize the size of the seed. The estimated de is comparable in size with the width of the Dwell bands
+      if(j>maxiter) continue;//the seed is "inside" MBset.
+      
+      //compute weights for coloring based on j... Of course many others are possible
+      weightR=(j>=miniterR)&&(j<=maxiterR);//weightR*=j;
+      weightG=(j>=miniterG)&&(j<=maxiterG);//weightG*=j*2;
+      weightB=(j>=miniterB)&&(j<=maxiterB);//weightB*=j*10;
+      de*=sampleRadiusScaleFactor;//downscale the sample radius for more accurate results... not necessary... 
+      de=max(sampleMinRadius*0.5/resx,de);//One can also set a minimal radius but it will give blur things
+      xc=x;yc=y;
+      dx=1;dy=0;
+      k=0;
+      do{
+         if(k>4){//try other conditions (for example k%2==0)
+            dr=sqrt(dx*dx+dy*dy);
+            sbuf(x,y,0,dr*de,weightR);//draw the sample in the scale pyramid
+            sbuf(x,-y,0,dr*de,weightR);//Taking advantage of symmetry
+            sbuf(x,y,1,dr*de,weightG);
+            sbuf(x,-y,1,dr*de,weightG);
+            sbuf(x,y,2,dr*de,weightB);
+            sbuf(x,-y,2,dr*de,weightB);
+            //one can also change the weights here... For example multiply them by a value near 1
+            //weightR-=1;weightG-=1;//weightB-=1;
+         }
+         if(x*x+y*y>100) break;
+         xx=2*(x*dx-y*dy);dy=2*(x*dy+y*dx);dx=xx+1;
+         
+         xx=x*x-y*y+xc;
+         yy=2*x*y+yc;
+         x=xx;y=yy;
+         j--;k++;
+      }while(j>0);
+   }
+}
+escape(x,y,xc,yc,maxiter,&de){
+   //Quick conditions if we are inside the main cardioid or the main disc
+   q = (xc-0.25)*(xc-0.25) + yc*yc;
+   if (((xc+1)*(xc+1) + yc*yc < 0.0625)||(q*(q+(xc-0.25)) < 0.25*yc*yc)){
+      de=0;
+      return maxiter+1;
+   }
+   //Good old mandelbrot set iteration
+   k=0;dx=1;dy=0;
+   while(k<=maxiter){
+      if(x*x+y*y>bailoutRadius) break;
+      xx=2*(x*dx-y*dy);dy=2*(x*dy+y*dx);dx=xx+1;
+      xx=x*x-y*y+xc;
+      yy=2*x*y+yc;
+      x=xx;y=yy;
+      k++;
+   }
+   r=sqrt(x*x+y*y); dr=sqrt(dx*dx+dy*dy);
+   //compute distance estimate
+   de=0.5*r*log(r)/dr;//0.5*r*(log(r)-2^(-k)*log(2))/dr;
+   k
+}
+
+//Not the best implementation :D
+getpixsize(level){
+   if(level<0) return 0;
+   k=2^level;
+   k*zom;
+}
+getlevel(d){
+   level=log(d*zom)*0.5/log(2);
+   //level=floor(level);
+   //min(3,max(-1,level))
+   //-1
+}
+sbuf(x,y,index,d,weight){//index->color channel; d->size of the sample.
+   if(weight<=0) return;
+   l=getlevel(d);
+   //d*=zom;
+   //if(l<-1) {sbufl(x,y,index,weight);}else 
+   if(l<0) {/*w=(l+1);sbufl(x,y,index,(1-w)*weight);*/sbufl0(x,y,index,(0*w+1)*weight);} else 
+   if(l<1) {w=l;sbufl0(x,y,index,(1-w)*weight);sbufl1(x,y,index,0.25*w*weight);} else 
+   if(l<2) {w=(l-1);sbufl1(x,y,index,0.25*(1-w)*weight);sbufl2(x,y,index,0.25*0.25*w*weight);} else 
+   if(l<3) {w=(l-2);sbufl2(x,y,index,0.25*0.25*(1-w)*weight);sbufl3(x,y,index,0.25*0.25*0.25*w*weight);} else 
+   if(l<4) {w=(l-3);sbufl3(x,y,index,0.25*0.25*0.25*(1-w)*weight);sbufl4(x,y,index,0.25*0.25*0.25*0.25*w*weight);} else 
+   if(l<5) {w=(l-4);sbufl4(x,y,index,0.25*0.25*0.25*0.25*(1-w)*weight);sbufl5(x,y,index,0.25*0.25*0.25*0.25*0.25*w*weight);} else 
+   if(l>=5) {sbufl5(x,y,index,0.25*0.25*0.25*0.25*0.25*weight);}
+}
+sbufl(x,y,index,w){
+      sx=(x-xd)*rx+0.5;//sx=(0.5*resx)+(x-cx)*zom;
+      sy=(y-yd)*ry+0.5;//sy=(0.5*resy)+(cy-y)*zom;
+      if(sx>=0 && sx<resx && sy>=0 && sy<resy)
+         buf[sy][sx][index]+=w;
+}
+static hp=0.5;
+sbufl0(x,y,index,w){
+      sx=(x-xd)*rx;
+      sy=(y-yd)*ry;
+      wx=sx-floor(sx);wy=sy-floor(sy);
+      if(sx>=0 && sx<resx && sy>=0 && sy<resy)
+         buf0[sy][sx][index]+=w*(1-wx)*(1-wy);
+      if(sx+1>=0 && sx+1<resx && sy>=0 && sy<resy)
+         buf0[sy][sx+1][index]+=w*wx*(1-wy);
+      if(sx>=0 && sx<resx && sy+1>=0 && sy+1<resy)
+         buf0[sy+1][sx][index]+=w*(1-wx)*wy;
+      if(sx+1>=0 && sx+1<resx && sy+1>=0 && sy+1<resy)
+         buf0[sy+1][sx+1][index]+=w*wx*wy;
+}
+sbufl1(x,y,index,w){
+      
+      sx=0.5*(x-xd)*rx;
+      sy=0.5*(y-yd)*ry;
+      wx=sx-floor(sx);wy=sy-floor(sy);
+      if(sx>=0 && sx<0.5*resx && sy>=0 && sy<0.5*resy)
+         buf1[sy][sx][index]+=w*(1-wx)*(1-wy);
+      if(sx+1>=0 && sx+1<0.5*resx && sy>=0 && sy<0.5*resy)
+         buf1[sy][sx+1][index]+=w*wx*(1-wy);
+      if(sx>=0 && sx<0.5*resx && sy+1>=0 && sy+1<0.5*resy)
+         buf1[sy+1][sx][index]+=w*(1-wx)*wy;
+      if(sx+1>=0 && sx+1<0.5*resx && sy+1>=0 && sy+1<0.5*resy)
+         buf1[sy+1][sx+1][index]+=w*wx*wy;
+}
+sbufl2(x,y,index,w){
+      sx=0.25*(x-xd)*rx;
+      sy=0.25*(y-yd)*ry;
+      wx=sx-floor(sx);wy=sy-floor(sy);
+      if(sx>=0 && sx<0.25*resx && sy>=0 && sy<0.25*resy)
+         buf2[sy][sx][index]+=w*(1-wx)*(1-wy);
+      if(sx+1>=0 && sx+1<0.25*resx && sy>=0 && sy<0.25*resy)
+         buf2[sy][sx+1][index]+=w*wx*(1-wy);
+      if(sx>=0 && sx<0.25*resx && sy+1>=0 && sy+1<0.25*resy)
+         buf2[sy+1][sx][index]+=w*(1-wx)*wy;
+      if(sx+1>=0 && sx+1<0.25*resx && sy+1>=0 && sy+1<0.25*resy)
+         buf2[sy+1][sx+1][index]+=w*wx*wy;
+}
+sbufl3(x,y,index,w){
+      sx=0.125*(x-xd)*rx;
+      sy=0.125*(y-yd)*ry;
+      wx=sx-floor(sx);wy=sy-floor(sy);
+      if(sx>=0 && sx<0.125*resx && sy>=0 && sy<0.125*resy)
+         buf3[sy][sx][index]+=w*(1-wx)*(1-wy);
+      if(sx+1>=0 && sx+1<0.125*resx && sy>=0 && sy<0.125*resy)
+         buf3[sy][sx+1][index]+=w*wx*(1-wy);
+      if(sx>=0 && sx<0.125*resx && sy+1>=0 && sy+1<0.125*resy)
+         buf3[sy+1][sx][index]+=w*(1-wx)*wy;
+      if(sx+1>=0 && sx+1<0.125*resx && sy+1>=0 && sy+1<0.125*resy)
+         buf3[sy+1][sx+1][index]+=w*wx*wy;
+}
+sbufl4(x,y,index,w){
+      sx=1/16*(x-xd)*rx;
+      sy=1/16*(y-yd)*ry;
+      wx=sx-floor(sx);wy=sy-floor(sy);
+      if(sx>=0 && sx<1/16*resx && sy>=0 && sy<1/16*resy)
+         buf4[sy][sx][index]+=w*(1-wx)*(1-wy);
+      if(sx+1>=0 && sx+1<1/16*resx && sy>=0 && sy<1/16*resy)
+         buf4[sy][sx+1][index]+=w*wx*(1-wy);
+      if(sx>=0 && sx<1/16*resx && sy+1>=0 && sy+1<1/16*resy)
+         buf4[sy+1][sx][index]+=w*(1-wx)*wy;
+      if(sx+1>=0 && sx+1<1/16*resx && sy+1>=0 && sy+1<1/16*resy)
+         buf4[sy+1][sx+1][index]+=w*wx*wy;
+}
+sbufl5(x,y,index,w){
+      sx=1/32*(x-xd)*rx;
+      sy=1/32*(y-yd)*ry;
+      wx=sx-floor(sx);wy=sy-floor(sy);
+      if(sx>=0 && sx<1/32*resx && sy>=0 && sy<1/32*resy)
+         buf5[sy][sx][index]+=w*(1-wx)*(1-wy);
+      if(sx+1>=0 && sx+1<1/32*resx && sy>=0 && sy<1/32*resy)
+         buf5[sy][sx+1][index]+=w*wx*(1-wy);
+      if(sx>=0 && sx<1/32*resx && sy+1>=0 && sy+1<1/32*resy)
+         buf5[sy+1][sx][index]+=w*(1-wx)*wy;
+      if(sx+1>=0 && sx+1<1/32*resx && sy+1>=0 && sy+1<1/32*resy)
+         buf5[sy+1][sx+1][index]+=w*wx*wy;
+}
+drawit(bright,expo){
+   for(l=0;l<resy;l++)
+      for(c=0;c<resx;c++){//for each pixel get the final color from the scale pyramid
+         r=buf[l][c][0]+buf0[l][c][0];
+         g=buf[l][c][1]+buf0[l][c][1];
+         b=buf[l][c][2]+buf0[l][c][2];
+         
+         c0=floor(c*0.5);l0=floor(l*0.5);u=0.5*c-c0;v=0.5*l-l0; c1=min(0.5*resx-1,c0+1); l1=min(0.5*resy-1,l0+1);
+         r1=buf1[l0][c0][0]*(1-u)*(1-v)+buf1[l0][c1][0]*u*(1-v)+buf1[l1][c0][0]*(1-u)*v+buf1[l1][c1][0]*u*v;
+         g1=buf1[l0][c0][1]*(1-u)*(1-v)+buf1[l0][c1][1]*u*(1-v)+buf1[l1][c0][1]*(1-u)*v+buf1[l1][c1][1]*u*v;
+         b1=buf1[l0][c0][2]*(1-u)*(1-v)+buf1[l0][c1][2]*u*(1-v)+buf1[l1][c0][2]*(1-u)*v+buf1[l1][c1][2]*u*v;
+         
+         c0=floor(c*0.25);l0=floor(l*0.25);u=0.25*c-c0;v=0.25*l-l0; c1=min(0.25*resx-1,c0+1); l1=min(0.25*resy-1,l0+1);
+         r2=buf2[l0][c0][0]*(1-u)*(1-v)+buf2[l0][c1][0]*u*(1-v)+buf2[l1][c0][0]*(1-u)*v+buf2[l1][c1][0]*u*v;
+         g2=buf2[l0][c0][1]*(1-u)*(1-v)+buf2[l0][c1][1]*u*(1-v)+buf2[l1][c0][1]*(1-u)*v+buf2[l1][c1][1]*u*v;
+         b2=buf2[l0][c0][2]*(1-u)*(1-v)+buf2[l0][c1][2]*u*(1-v)+buf2[l1][c0][2]*(1-u)*v+buf2[l1][c1][2]*u*v;
+         
+         c0=floor(c*0.125);l0=floor(l*0.125);u=0.125*c-c0;v=0.125*l-l0; c1=min(0.125*resx-1,c0+1); l1=min(0.125*resy-1,l0+1);
+         r3=buf3[l0][c0][0]*(1-u)*(1-v)+buf3[l0][c1][0]*u*(1-v)+buf3[l1][c0][0]*(1-u)*v+buf3[l1][c1][0]*u*v;
+         g3=buf3[l0][c0][1]*(1-u)*(1-v)+buf3[l0][c1][1]*u*(1-v)+buf3[l1][c0][1]*(1-u)*v+buf3[l1][c1][1]*u*v;
+         b3=buf3[l0][c0][2]*(1-u)*(1-v)+buf3[l0][c1][2]*u*(1-v)+buf3[l1][c0][2]*(1-u)*v+buf3[l1][c1][2]*u*v;
+         
+         c0=floor(c*1/16);l0=floor(l*1/16);u=1/16*c-c0;v=1/16*l-l0; c1=min(1/16*resx-1,c0+1); l1=min(1/16*resy-1,l0+1);
+         r4=buf4[l0][c0][0]*(1-u)*(1-v)+buf4[l0][c1][0]*u*(1-v)+buf4[l1][c0][0]*(1-u)*v+buf4[l1][c1][0]*u*v;
+         g4=buf4[l0][c0][1]*(1-u)*(1-v)+buf4[l0][c1][1]*u*(1-v)+buf4[l1][c0][1]*(1-u)*v+buf4[l1][c1][1]*u*v;
+         b4=buf4[l0][c0][2]*(1-u)*(1-v)+buf4[l0][c1][2]*u*(1-v)+buf4[l1][c0][2]*(1-u)*v+buf4[l1][c1][2]*u*v;
+         
+         c0=floor(c*1/32);l0=floor(l*1/32);u=1/32*c-c0;v=1/32*l-l0; c1=min(1/32*resx-1,c0+1); l1=min(1/32*resy-1,l0+1);
+         r5=buf5[l0][c0][0]*(1-u)*(1-v)+buf5[l0][c1][0]*u*(1-v)+buf5[l1][c0][0]*(1-u)*v+buf5[l1][c1][0]*u*v;
+         g5=buf5[l0][c0][1]*(1-u)*(1-v)+buf5[l0][c1][1]*u*(1-v)+buf5[l1][c0][1]*(1-u)*v+buf5[l1][c1][1]*u*v;
+         b5=buf5[l0][c0][2]*(1-u)*(1-v)+buf5[l0][c1][2]*u*(1-v)+buf5[l1][c0][2]*(1-u)*v+buf5[l1][c1][2]*u*v;
+         
+         r+=r1+r2+r3+r4+r5;g+=g1+g2+g3+g4+g5;b+=b1+b2+b3+b4+b5;
+         r*=bright; r=r^expo; r=4*(256-256/(r+1));//r=4*(256-256/(r*bright+1));
+         g*=bright; g=g^expo; g=4*(256-256/(g+1));//g=4*(256-256/(g*bright+1));
+         b*=bright; b=b^expo; b=4*(256-256/(b+1));//b=4*(256-256/(b*bright+1));
+         setcol(r,g,b);
+         setpix(c,l);
+      }
+}

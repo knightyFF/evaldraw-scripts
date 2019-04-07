@@ -1,0 +1,31 @@
+static a[3]={0,1,0};
+static b[3]={sqrt(3)/2,-0.5,0};
+static c[3]={-sqrt(3)/2,-0.5,sqrt(3)/2};
+static vi[3]={3/2,-sqrt(3)/2,0};
+static vj[3]={3/2,sqrt(3)/2,0};
+(x,y,&r,&g,&b){
+   reduce(x,y);
+   
+      y=abs(y);//fold(x,y,a);
+      fold(x,y,c);
+      y=abs(y);//fold(x,y,a);
+   
+   pic(mousx+200*x,mousy-200*y,r,g,b)
+}
+reduce(&x,&y){
+   alp=x*1/3-y*1/sqrt(3);
+   bet=x*1/3+y*1/sqrt(3);
+   alp=alp-floor(alp);
+   bet=bet-floor(bet);
+   x=3/2*(alp+bet);
+   y=sqrt(3)/2*(bet-alp);
+   s=sgn(y);y=abs(y);
+   if((x*c[0]+y*c[1]+2*c[2])<0)
+      {x-=vj[0];y-=vj[1];}
+   y*=s;
+}
+fold(&x,&y,p[3]){
+   t=x*p[0]+y*p[1]+p[2];
+   t=2*min(t,0);
+   x-=t*p[0];y-=t*p[1];
+}

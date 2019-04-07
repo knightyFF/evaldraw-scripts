@@ -1,0 +1,971 @@
+enum{mapsiz=1024};
+static map[mapsiz][mapsiz];
+static tex;
+static drawmandel=1;
+static boxhalfwidth=0.125;
+static nbrpts=0;
+static brightness=1000.;
+static klc;
+static nbrSamples=0,nbrPtRendered=0;
+static nbrTours=0;
+(){
+   glEnable(GL_ALPHA_TEST);glDisable(GL_DEPTH_TEST);
+   if(numframes==0){
+      klc=klock();
+      cls(0x008fff);
+      setboxtrap(.65,0.25,0.1);//setboxtrap(-1.7685,-0.0035,0.05);//setboxtrap(-1.1,-0.75,0.2);//setboxtrap(0.75,0.6,0.15);//setboxtrap(-0.0,-1.05,0.2);//setboxtrap(0,0,2);//setboxtrap(1.2,0,.75);//
+      initbb();
+      init_seeds();
+   }
+   kk=klock();
+   
+   if(keystatus[0x39]){cls(0);initbb();nbrPtRendered=0;keystatus[0x39]=0;}
+   if(keystatus[0x1d]){
+      init_seeds();
+      //for(i=0;i<50;i++) new_generation();
+      keystatus[0x1d]=0;
+   }
+   if(numframes==2) {initbb(); nbrPtRendered=0; nbrSamples=0;}
+   if(keystatus[0xc8]){brightness*=1.1;keystatus[0xc8]=0;}
+   if(keystatus[0xd0]){brightness/=1.1;keystatus[0xd0]=0;}
+   
+   total=0;inside=0;outside=0;
+   
+      for(i=0;i<100;i++) new_generation();
+
+      nbrpts+=1000;
+      if(kk-klc>1) //if(numframes%20==0)
+      {
+         klc=kk:
+         setcol(0x0); drawcone(xres-220,40,40,xres,40,40);      
+         moveto(xres-200,0);setcol(0xffffff);
+         printf("total seeds = %g Mega.\nSamples = %g Mega.\ntime = %g.\nNbrTours = %g",nbrpts/1e6,nbrPtRendered/1e6,kk,nbrTours);
+         drawit(brightness*mousx/nbrSamples,0.002*mousy);
+      }
+}  
+///////////////////////////////////////////////////////////////////////////////////
+enum{mapsizbb=24*32};
+static bx0=0,by0=0,bx1=1,by1=1,bwidth=0;
+static mag=1,zoom=1,zom=1,rx,ry;
+static bcx=-.75, bcy=0.7, bhwx=0.25, bhwy=0.25;
+setboxtrap(cx,cy,hw){
+   x0=cx-hw;y0=cy-hw;
+   x1=cx+hw;y1=cy+hw;
+   if(x1>x0){bx0=x0;bx1=x1;}else{bx0=x1;bx1=x0;}
+   if(y1>y0){by0=y0;by1=y1;}else{by0=y1;by1=y0;}
+   mag=sqrt(16/((bx1-bx0)*(by1-by0)));
+   zoom=1/hw;
+   zom=mapsizbb*0.5/hw;
+   rx=mapsizbb/(bx1-bx0);
+   ry=mapsizbb/(by1-by0);
+   bwidth=0.5*hw;
+   bcx=0.5*(x0+x1); bcy=0.5*(y0+y1);
+   bhwx=0.5*(x1-x0); bhwy=0.5*(y1-y0);
+}
+///////////////////////////////////////////////////////////////////////////////////
+static sampleRadiusScaleFactor=.25;//values less than 1 give slightly more accurate render
+static sampleMinRadius=0.;//values > 0 give smoother results but wash out deep iterations generated details. a value of 1 meanes a min radius of 0.5 pixel width in param space
+
+static maxiter=128,miniter=100;
+static bailoutRad=16,DEbailoutRad=10000;
+static accumAfter=5;
+
+mandeliterBT(x,y,&length,&it_length,&it_DE,&it_o_width){
+   // cardioid and period-2 bulb test
+   q = (x-0.25)*(x-0.25) + y*y;
+   if (((x+1)*(x+1) + y*y < 0.0625)||(q*(q+(x-0.25)) < 0.25*y*y)){
+      length=maxiter+1;
+      it_length=maxiter;
+      return 0;
+   }
+   cx=x;cy=y;
+   dx=1;dy=0;
+   cdx=1;cdy=0;
+   r2=x*x+y*y;
+   i=0;
+   trapped=0;
+   do{
+      if(x>=bx0 && y>=by0 && x<bx1 && y<by1 /*&& i>=accumAfter*/) {
+         trapped++;
+         cdx=dx;cdy=dy;
+      }
+      if(x>=bx0 && -y>=by0 && x<bx1 && -y<by1 /*&& i>=accumAfter*/) {
+         trapped++;
+         cdx=dx;cdy=dy;
+      }
+      
+      dxx=2*(x*dx-y*dy)+1;
+      dy=2*(x*dy+y*dx);dx=dxx;
+      
+      xx=x*x-y*y+cx;
+      y=2*x*y+cy; x=xx;
+      
+      r2=x*x+y*y;    
+      
+      i++;
+   }while(i<maxiter && r2<bailoutRad);
+   
+   length=trapped; it_length=i;
+   trapped=trapped && i<maxiter && i>miniter;
+   if(trapped){//compute distance estimate
+      while(r2<DEbailoutRad){
+         dxx=2*(x*dx-y*dy)+1;
+         dy=2*(x*dy+y*dx);dx=dxx;
+         xx=x*x-y*y+cx;
+         y=2*x*y+cy; x=xx;
+         r2=x*x+y*y;
+      }
+   }
+   r=sqrt(r2); dr=sqrt(dx*dx+dy*dy); it_DE=0.5*r*(log(r)-0.5^(i)*log(2))/dr;
+   
+   cdr=sqrt(cdx*cdx+cdy*cdy);
+   it_DE=max(1./(zom*cdr),it_DE);//*20/it_length
+   it_DE=max(sampleMinRadius/zom,it_DE);
+   //it_o_width=bwidth/sqrt(cdx*cdx+cdy*cdy);
+   //it_o_width=max(it_o_width,4*it_DE);
+   //it_o_width=max(4*it_DE,bwidth*1/mapsizbb);
+   it_o_width=max(4*it_DE,bwidth*1/mapsizbb);//0.005/mag;
+   //it_o_width=0.001*bwidth;
+   length=1/max(0.001*bwidth,it_DE)^2;// 1/it_o_width^2;//
+   it_DE*=sampleRadiusScaleFactor; 
+   
+   trapped
+}
+mandelacc(x,y,length,it_length,it_DE){
+   multi=0.1/(length^.0);//0.01*it_length/length;//0.1;//1/log(length+1);//
+   it_DE=max(sampleMinRadius,it_DE*zom);//set sample sizes in screen coordinate and clamp
+   cx=x; cy=y; i=0;
+   dx=1; dy=0;
+   i=0;
+   do{
+      if((x>=bx0 && (y>=by0 || -y>=by0) && x<bx1 && (y<by1 || -y<by1)) && i>=accumAfter){
+#if 1
+         dr=sqrt(dx*dx+dy*dy);
+         sbuf(x,y,multi,i,it_length,dr*it_DE);
+         sbuf(x,-y,multi,i,it_length,dr*it_DE);
+#else         
+         accumulate(x,y,multi,i,it_length);
+         accumulate(x,-y,multi,i,it_length);
+#endif
+      }
+      dxx=2*(x*dx-y*dy)+1;
+      dy=2*(x*dy+y*dx);dx=dxx;
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;      
+      
+      r2=x*x+y*y;
+      i++;
+   }while(i<maxiter && r2<bailoutRad);
+}
+///////////////////////////////////////////////////////////////////////////////////
+
+static mapbb[mapsizbb][mapsizbb][3];
+static mapbb0[mapsizbb][mapsizbb][3];//buffer for the samples wich size is comparable to pixel size (scale 0)
+static mapbb1[mapsizbb*0.5][mapsizbb*0.5][3];//scale 1 (pixel size==2)
+static mapbb2[mapsizbb*0.25][mapsizbb*0.25][3];
+static mapbb3[mapsizbb*0.125][mapsizbb*0.125][3];
+static mapbb4[mapsizbb/16][mapsizbb/16][3];
+static mapbb5[mapsizbb/32][mapsizbb/32][3];//scale 5 (pixel size==32)
+
+static minr=100,maxr=600;
+static ming=50,maxg=200;
+static minb=0,maxb=100;
+
+initbb(){
+   maxiter=max(maxr,max(maxg,maxb));
+   miniter=min(minr,min(ming,minb));
+   for(l=0;l<mapsizbb;l++) for(c=0;c<mapsizbb;c++){ mapbb[l][c][0]=0;mapbb[l][c][1]=0;mapbb[l][c][2]=0;}
+   for(l=0;l<mapsizbb;l++) for(c=0;c<mapsizbb;c++){ mapbb0[l][c][0]=0;mapbb0[l][c][1]=0;mapbb0[l][c][2]=0;}
+   for(l=0;l<mapsizbb*1/2;l++) for(c=0;c<mapsizbb*1/2;c++){ mapbb1[l][c][0]=0;mapbb1[l][c][1]=0;mapbb1[l][c][2]=0;}
+   for(l=0;l<mapsizbb*1/4;l++) for(c=0;c<mapsizbb*1/4;c++){ mapbb2[l][c][0]=0;mapbb2[l][c][1]=0;mapbb2[l][c][2]=0;}
+   for(l=0;l<mapsizbb*1/8;l++) for(c=0;c<mapsizbb*1/8;c++){ mapbb3[l][c][0]=0;mapbb3[l][c][1]=0;mapbb3[l][c][2]=0;}
+   for(l=0;l<mapsizbb*1/16;l++) for(c=0;c<mapsizbb*1/16;c++){ mapbb4[l][c][0]=0;mapbb4[l][c][1]=0;mapbb4[l][c][2]=0;}
+   for(l=0;l<mapsizbb*1/32;l++) for(c=0;c<mapsizbb*1/32;c++){ mapbb5[l][c][0]=0;mapbb5[l][c][1]=0;mapbb5[l][c][2]=0;}
+}
+calcbb(){
+}
+
+//use scale pyramid to filter the samples using their sizes
+//Not the best implementation: very very big overhead!
+getlevel(d){
+   level=log(d)/log(2);
+}
+
+sbuf(x,y,weight,itnum,it_length,d){//index->color channel; d->size of the sample.
+   
+   if(weight<=0 /*|| numframes<1000*/) return;
+   nbrPtRendered++;
+   nbrSamples+=weight;
+   l=getlevel(max(1*d,0.75));
+   
+   if(l<-1) {accumulate(x,y,weight,itnum,it_length);}else 
+   if(l<0) {w=(l+1);accumulate(x,y,(1-w)*weight,itnum,it_length);accumulate0(x,y,w*weight,itnum,it_length);} else 
+   if(l<1) {w=l;accumulate0(x,y,(1-w)*weight,itnum,it_length);accumulate1(x,y,0.25*w*weight,itnum,it_length);} else 
+   if(l<2) {w=(l-1);accumulate1(x,y,0.25*(1-w)*weight,itnum,it_length);accumulate2(x,y,0.25^2*w*weight,itnum,it_length);} else 
+   if(l<3) {w=(l-2);accumulate2(x,y,0.25^2*(1-w)*weight,itnum,it_length);accumulate3(x,y,0.25^3*w*weight,itnum,it_length);} else 
+   if(l<4) {w=(l-3);accumulate3(x,y,0.25^3*(1-w)*weight,itnum,it_length);accumulate4(x,y,0.25^4*w*weight,itnum,it_length);} else 
+   if(l<5) {w=(l-4);accumulate4(x,y,0.25^4*(1-w)*weight,itnum,it_length);accumulate5(x,y,0.25^5*w*weight,itnum,it_length);} else 
+   if(l>=5) {accumulate5(x,y,0.25^5*weight,itnum,it_length);}
+}
+
+accumulate(x,y,weight,itnum,it_length){
+   nbrPtRendered++;
+   nbrSamples+=weight;
+   sx=(x-bx0)*mapsizbb/(bx1-bx0);
+   sy=(y-by0)*mapsizbb/(by1-by0);
+   if(sx>=0 && sx<mapsizbb && sy>=0 && sy<mapsizbb){
+      nbrPtRendered++;
+      nbrSamples+=weight;
+      if(it_length>minr && it_length<maxr) mapbb[sy][sx][0]+=weight;
+      if(it_length>ming && it_length<maxg) mapbb[sy][sx][1]+=weight;
+      if(it_length>minb && it_length<maxb) mapbb[sy][sx][2]+=weight;
+   }
+}
+
+accumulate0(x,y,w,itnum,it_length){
+   k=mapsizbb/1;
+   sx=(x-bx0)/(bx1-bx0)*k;
+   sy=(y-by0)/(by1-by0)*k;
+   wx=sx-floor(sx);wy=sy-floor(sy);
+   w00=w*(1-wx)*(1-wy); w01=w*wx*(1-wy);
+   w10=w*(1-wx)*wy; w11=w*wx*wy;
+   condr=it_length>minr && it_length<maxr;
+   condg=it_length>ming && it_length<maxg;
+   condb=it_length>minb && it_length<maxb;
+   if(sx>=0 && sx<k && sy>=0 && sy<k){
+      if(condr) mapbb0[sy][sx][0]+=w00;
+      if(condg) mapbb0[sy][sx][1]+=w00;
+      if(condb) mapbb0[sy][sx][2]+=w00;
+   }
+   if(sx+1>=0 && sx+1<k && sy>=0 && sy<k){
+      if(condr) mapbb0[sy][sx+1][0]+=w01;
+      if(condg) mapbb0[sy][sx+1][1]+=w01;
+      if(condb) mapbb0[sy][sx+1][2]+=w01;
+   }
+   if(sx>=0 && sx<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb0[sy+1][sx][0]+=w10;
+      if(condg) mapbb0[sy+1][sx][1]+=w10;
+      if(condb) mapbb0[sy+1][sx][2]+=w10;
+   }
+   if(sx+1>=0 && sx+1<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb0[sy+1][sx+1][0]+=w11;
+      if(condg) mapbb0[sy+1][sx+1][1]+=w11;
+      if(condb) mapbb0[sy+1][sx+1][2]+=w11;
+   }
+}
+
+accumulate1(x,y,w,itnum,it_length){
+   k=mapsizbb/2;
+   sx=(x-bx0)/(bx1-bx0)*k;
+   sy=(y-by0)/(by1-by0)*k;
+   wx=sx-floor(sx);wy=sy-floor(sy);
+   w00=w*(1-wx)*(1-wy); w01=w*wx*(1-wy);
+   w10=w*(1-wx)*wy; w11=w*wx*wy;
+   condr=it_length>minr && it_length<maxr;
+   condg=it_length>ming && it_length<maxg;
+   condb=it_length>minb && it_length<maxb;
+   if(sx>=0 && sx<k && sy>=0 && sy<k){
+      if(condr) mapbb1[sy][sx][0]+=w00;
+      if(condg) mapbb1[sy][sx][1]+=w00;
+      if(condb) mapbb1[sy][sx][2]+=w00;
+   }
+   if(sx+1>=0 && sx+1<k && sy>=0 && sy<k){
+      if(condr) mapbb1[sy][sx+1][0]+=w01;
+      if(condg) mapbb1[sy][sx+1][1]+=w01;
+      if(condb) mapbb1[sy][sx+1][2]+=w01;
+   }
+   if(sx>=0 && sx<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb1[sy+1][sx][0]+=w10;
+      if(condg) mapbb1[sy+1][sx][1]+=w10;
+      if(condb) mapbb1[sy+1][sx][2]+=w10;
+   }
+   if(sx+1>=0 && sx+1<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb1[sy+1][sx+1][0]+=w11;
+      if(condg) mapbb1[sy+1][sx+1][1]+=w11;
+      if(condb) mapbb1[sy+1][sx+1][2]+=w11;
+   }
+}
+
+accumulate2(x,y,w,itnum,it_length){
+   k=mapsizbb/4;
+   sx=(x-bx0)/(bx1-bx0)*k;
+   sy=(y-by0)/(by1-by0)*k;
+   wx=sx-floor(sx);wy=sy-floor(sy);
+   w00=w*(1-wx)*(1-wy); w01=w*wx*(1-wy);
+   w10=w*(1-wx)*wy; w11=w*wx*wy;
+   condr=it_length>minr && it_length<maxr;
+   condg=it_length>ming && it_length<maxg;
+   condb=it_length>minb && it_length<maxb;
+   if(sx>=0 && sx<k && sy>=0 && sy<k){
+      if(condr) mapbb2[sy][sx][0]+=w00;
+      if(condg) mapbb2[sy][sx][1]+=w00;
+      if(condb) mapbb2[sy][sx][2]+=w00;
+   }
+   if(sx+1>=0 && sx+1<k && sy>=0 && sy<k){
+      if(condr) mapbb2[sy][sx+1][0]+=w01;
+      if(condg) mapbb2[sy][sx+1][1]+=w01;
+      if(condb) mapbb2[sy][sx+1][2]+=w01;
+   }
+   if(sx>=0 && sx<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb2[sy+1][sx][0]+=w10;
+      if(condg) mapbb2[sy+1][sx][1]+=w10;
+      if(condb) mapbb2[sy+1][sx][2]+=w10;
+   }
+   if(sx+1>=0 && sx+1<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb2[sy+1][sx+1][0]+=w11;
+      if(condg) mapbb2[sy+1][sx+1][1]+=w11;
+      if(condb) mapbb2[sy+1][sx+1][2]+=w11;
+   }
+}
+
+accumulate3(x,y,w,itnum,it_length){
+   k=mapsizbb/8;
+   sx=(x-bx0)/(bx1-bx0)*k;
+   sy=(y-by0)/(by1-by0)*k;
+   wx=sx-floor(sx);wy=sy-floor(sy);
+   w00=w*(1-wx)*(1-wy); w01=w*wx*(1-wy);
+   w10=w*(1-wx)*wy; w11=w*wx*wy;
+   condr=it_length>minr && it_length<maxr;
+   condg=it_length>ming && it_length<maxg;
+   condb=it_length>minb && it_length<maxb;
+   if(sx>=0 && sx<k && sy>=0 && sy<k){
+      if(condr) mapbb3[sy][sx][0]+=w00;
+      if(condg) mapbb3[sy][sx][1]+=w00;
+      if(condb) mapbb3[sy][sx][2]+=w00;
+   }
+   if(sx+1>=0 && sx+1<k && sy>=0 && sy<k){
+      if(condr) mapbb3[sy][sx+1][0]+=w01;
+      if(condg) mapbb3[sy][sx+1][1]+=w01;
+      if(condb) mapbb3[sy][sx+1][2]+=w01;
+   }
+   if(sx>=0 && sx<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb3[sy+1][sx][0]+=w10;
+      if(condg) mapbb3[sy+1][sx][1]+=w10;
+      if(condb) mapbb3[sy+1][sx][2]+=w10;
+   }
+   if(sx+1>=0 && sx+1<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb3[sy+1][sx+1][0]+=w11;
+      if(condg) mapbb3[sy+1][sx+1][1]+=w11;
+      if(condb) mapbb3[sy+1][sx+1][2]+=w11;
+   }
+}
+
+accumulate4(x,y,w,itnum,it_length){
+   k=mapsizbb/16;
+   sx=(x-bx0)/(bx1-bx0)*k;
+   sy=(y-by0)/(by1-by0)*k;
+   wx=sx-floor(sx);wy=sy-floor(sy);
+   w00=w*(1-wx)*(1-wy); w01=w*wx*(1-wy);
+   w10=w*(1-wx)*wy; w11=w*wx*wy;
+   condr=it_length>minr && it_length<maxr;
+   condg=it_length>ming && it_length<maxg;
+   condb=it_length>minb && it_length<maxb;
+   if(sx>=0 && sx<k && sy>=0 && sy<k){
+      if(condr) mapbb4[sy][sx][0]+=w00;
+      if(condg) mapbb4[sy][sx][1]+=w00;
+      if(condb) mapbb4[sy][sx][2]+=w00;
+   }
+   if(sx+1>=0 && sx+1<k && sy>=0 && sy<k){
+      if(condr) mapbb4[sy][sx+1][0]+=w01;
+      if(condg) mapbb4[sy][sx+1][1]+=w01;
+      if(condb) mapbb4[sy][sx+1][2]+=w01;
+   }
+   if(sx>=0 && sx<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb4[sy+1][sx][0]+=w10;
+      if(condg) mapbb4[sy+1][sx][1]+=w10;
+      if(condb) mapbb4[sy+1][sx][2]+=w10;
+   }
+   if(sx+1>=0 && sx+1<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb4[sy+1][sx+1][0]+=w11;
+      if(condg) mapbb4[sy+1][sx+1][1]+=w11;
+      if(condb) mapbb4[sy+1][sx+1][2]+=w11;
+   }
+}
+
+accumulate5(x,y,w,itnum,it_length){
+   k=mapsizbb/32;
+   sx=(x-bx0)/(bx1-bx0)*k;
+   sy=(y-by0)/(by1-by0)*k;
+   wx=sx-floor(sx);wy=sy-floor(sy);
+   w00=w*(1-wx)*(1-wy); w01=w*wx*(1-wy);
+   w10=w*(1-wx)*wy; w11=w*wx*wy;
+   condr=it_length>minr && it_length<maxr;
+   condg=it_length>ming && it_length<maxg;
+   condb=it_length>minb && it_length<maxb;
+   if(sx>=0 && sx<k && sy>=0 && sy<k){
+      if(condr) mapbb5[sy][sx][0]+=w00;
+      if(condg) mapbb5[sy][sx][1]+=w00;
+      if(condb) mapbb5[sy][sx][2]+=w00;
+   }
+   if(sx+1>=0 && sx+1<k && sy>=0 && sy<k){
+      if(condr) mapbb5[sy][sx+1][0]+=w01;
+      if(condg) mapbb5[sy][sx+1][1]+=w01;
+      if(condb) mapbb5[sy][sx+1][2]+=w01;
+   }
+   if(sx>=0 && sx<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb5[sy+1][sx][0]+=w10;
+      if(condg) mapbb5[sy+1][sx][1]+=w10;
+      if(condb) mapbb5[sy+1][sx][2]+=w10;
+   }
+   if(sx+1>=0 && sx+1<k && sy+1>=0 && sy+1<k){
+      if(condr) mapbb5[sy+1][sx+1][0]+=w11;
+      if(condg) mapbb5[sy+1][sx+1][1]+=w11;
+      if(condb) mapbb5[sy+1][sx+1][2]+=w11;
+   }
+}
+
+drawbb(bright,expo){
+   bright=bright*mapsizbb*mapsizbb*zoom*zoom;
+   for(l=0;l<mapsizbb;l++)
+      for(c=0;c<mapsizbb;c++){
+         r=mapbb[l][c][0]*bright;r=4*(256-256/(r^expo+1));
+         g=mapbb[l][c][1]*bright;g=4*(256-256/(g^expo+1));
+         b=mapbb[l][c][2]*bright;b=4*(256-256/(b^expo+1));
+         setcol(r,g,b);
+         setpix(c,l);
+      }
+}
+
+drawit(bright,expo){
+   //bright=bright*mapsizbb*mapsizbb*zoom*zoom;
+   for(l=0;l<mapsizbb;l++)
+      for(c=0;c<mapsizbb;c++){//for each pixel get the final color from the scale pyramid
+         r=mapbb[l][c][0]+mapbb0[l][c][0];
+         g=mapbb[l][c][1]+mapbb0[l][c][1];
+         b=mapbb[l][c][2]+mapbb0[l][c][2];
+         
+         c0=floor(c*0.5);l0=floor(l*0.5);u=0.5*c-c0;v=0.5*l-l0; c1=min(0.5*mapsizbb-1,c0+1); l1=min(0.5*mapsizbb-1,l0+1);
+         r1=mapbb1[l0][c0][0]*(1-u)*(1-v)+mapbb1[l0][c1][0]*u*(1-v)+mapbb1[l1][c0][0]*(1-u)*v+mapbb1[l1][c1][0]*u*v;
+         g1=mapbb1[l0][c0][1]*(1-u)*(1-v)+mapbb1[l0][c1][1]*u*(1-v)+mapbb1[l1][c0][1]*(1-u)*v+mapbb1[l1][c1][1]*u*v;
+         b1=mapbb1[l0][c0][2]*(1-u)*(1-v)+mapbb1[l0][c1][2]*u*(1-v)+mapbb1[l1][c0][2]*(1-u)*v+mapbb1[l1][c1][2]*u*v;
+         
+         c0=floor(c*0.25);l0=floor(l*0.25);u=0.25*c-c0;v=0.25*l-l0; c1=min(0.25*mapsizbb-1,c0+1); l1=min(0.25*mapsizbb-1,l0+1);
+         r2=mapbb2[l0][c0][0]*(1-u)*(1-v)+mapbb2[l0][c1][0]*u*(1-v)+mapbb2[l1][c0][0]*(1-u)*v+mapbb2[l1][c1][0]*u*v;
+         g2=mapbb2[l0][c0][1]*(1-u)*(1-v)+mapbb2[l0][c1][1]*u*(1-v)+mapbb2[l1][c0][1]*(1-u)*v+mapbb2[l1][c1][1]*u*v;
+         b2=mapbb2[l0][c0][2]*(1-u)*(1-v)+mapbb2[l0][c1][2]*u*(1-v)+mapbb2[l1][c0][2]*(1-u)*v+mapbb2[l1][c1][2]*u*v;
+         
+         c0=floor(c*0.125);l0=floor(l*0.125);u=0.125*c-c0;v=0.125*l-l0; c1=min(0.125*mapsizbb-1,c0+1); l1=min(0.125*mapsizbb-1,l0+1);
+         r3=mapbb3[l0][c0][0]*(1-u)*(1-v)+mapbb3[l0][c1][0]*u*(1-v)+mapbb3[l1][c0][0]*(1-u)*v+mapbb3[l1][c1][0]*u*v;
+         g3=mapbb3[l0][c0][1]*(1-u)*(1-v)+mapbb3[l0][c1][1]*u*(1-v)+mapbb3[l1][c0][1]*(1-u)*v+mapbb3[l1][c1][1]*u*v;
+         b3=mapbb3[l0][c0][2]*(1-u)*(1-v)+mapbb3[l0][c1][2]*u*(1-v)+mapbb3[l1][c0][2]*(1-u)*v+mapbb3[l1][c1][2]*u*v;
+         
+         c0=floor(c*1/16);l0=floor(l*1/16);u=1/16*c-c0;v=1/16*l-l0; c1=min(1/16*mapsizbb-1,c0+1); l1=min(1/16*mapsizbb-1,l0+1);
+         r4=mapbb4[l0][c0][0]*(1-u)*(1-v)+mapbb4[l0][c1][0]*u*(1-v)+mapbb4[l1][c0][0]*(1-u)*v+mapbb4[l1][c1][0]*u*v;
+         g4=mapbb4[l0][c0][1]*(1-u)*(1-v)+mapbb4[l0][c1][1]*u*(1-v)+mapbb4[l1][c0][1]*(1-u)*v+mapbb4[l1][c1][1]*u*v;
+         b4=mapbb4[l0][c0][2]*(1-u)*(1-v)+mapbb4[l0][c1][2]*u*(1-v)+mapbb4[l1][c0][2]*(1-u)*v+mapbb4[l1][c1][2]*u*v;
+         
+         c0=floor(c*1/32);l0=floor(l*1/32);u=1/32*c-c0;v=1/32*l-l0; c1=min(1/32*mapsizbb-1,c0+1); l1=min(1/32*mapsizbb-1,l0+1);
+         r5=mapbb5[l0][c0][0]*(1-u)*(1-v)+mapbb5[l0][c1][0]*u*(1-v)+mapbb5[l1][c0][0]*(1-u)*v+mapbb5[l1][c1][0]*u*v;
+         g5=mapbb5[l0][c0][1]*(1-u)*(1-v)+mapbb5[l0][c1][1]*u*(1-v)+mapbb5[l1][c0][1]*(1-u)*v+mapbb5[l1][c1][1]*u*v;
+         b5=mapbb5[l0][c0][2]*(1-u)*(1-v)+mapbb5[l0][c1][2]*u*(1-v)+mapbb5[l1][c0][2]*(1-u)*v+mapbb5[l1][c1][2]*u*v;
+         
+         r+=r1+r2+r3+r4+r5;g+=g1+g2+g3+g4+g5;b+=b1+b2+b3+b4+b5;
+         r*=bright; r=r^expo; r=4*(256-256/(r+1));
+         g*=bright; g=g^expo; g=4*(256-256/(g+1));
+         b*=bright; b=b^expo; b=4*(256-256/(b+1));
+         setcol(r,g,b);
+         setpix(c,l);
+      }
+}
+///////////////////////////////////////////////////////////////////////////////////
+halton(index,base){//from wiki pseudo code (http://en.wikipedia.org/wiki/Halton_sequences)
+   result=0;
+   ib=1/base;
+   f=ib;
+   i=index;
+   while (i>0){
+      i1=i*ib;
+      i=floor(i1);
+      result+=f*(i1-i)*base;
+      f*=ib;
+   }
+   return result;
+}
+static index=0;
+rndx(){
+   halton(index,2)
+}
+rndy(){
+   index+=1;
+   halton(index,3)
+}
+///////////////////////////////////////////////////////////////////////////////////
+enum{nbr_seeds=10};//number of points used
+static tab_seeds[nbr_seeds][7];//x,y,orbit_length,is_trapped, it_length, it_DE, it_o_width.
+
+init_seeds(){
+   for(i=0;i<nbr_seeds;i++){
+      k=0;
+      do{
+      //tab_seeds[i][0]=(rnd-0.5)*5;
+      //tab_seeds[i][1]=(rnd-0.5)*5;
+      GetSeed(tab_seeds[i][0], tab_seeds[i][1], 10);
+      tab_seeds[i][3]=mandeliterBT(tab_seeds[i][0],tab_seeds[i][1],tab_seeds[i][2],tab_seeds[i][4],tab_seeds[i][5],tab_seeds[i][6]);
+      k=tab_seeds[i][3];
+      } while (k==0);
+   }
+}
+//////////////////////////////////////////////////////////////////
+dist2boxSqr(x,y){
+   x-=bcx; y-=bcy;
+   x=max(0,abs(x)-bhwx); y=max(0,abs(y)-bhwy);
+   x*x+y*y
+}
+dist2boxInt(x,y){
+   x-=bcx; y-=bcy;
+   max(abs(x)-bhwx, abs(y)-bhwy);
+}
+#define _SUBDIV 1
+#define _FORGET 0
+#define _TRAPPED 2
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+mandelDE(x,y,rr0){
+   maxit=min(maxiter,max(100,1/rr0));
+   cx=x;cy=y;
+   x1=x;y1=y;k=0;
+   dx=1;dy=0; dr=1;
+   i=0;
+   r=sqrt(x*x+y*y);
+   pfound=0;
+   
+   nbrt=0; nbrt1=0;
+   if(i>=accumAfter){
+         d2b2=dist2boxSqr(x,y); if(d2b2<(dr*rr0)^2) nbrt+=1;
+         d2b2=dist2boxSqr(x,-y); if(d2b2<(dr*rr0)^2) nbrt+=1;
+      
+         d2b2=dist2boxInt(x,y); if(d2b2+(dr*rr0)<0) nbrt1+=1;
+         d2b2=dist2boxInt(x,-y); if(d2b2+(dr*rr0)<0) nbrt1+=1;
+      }
+
+   while(i<maxiter && r-dr*rr0<2){
+      dxx=2*(x*dx-y*dy)+1;dy=2*(x*dy+y*dx);dx=dxx;
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+      
+      dr=sqrt(dx*dx+dy*dy);
+      if(i>=accumAfter){
+         d2b2=dist2boxSqr(x,y); if(d2b2<(dr*rr0)^2) nbrt+=1;
+         d2b2=dist2boxSqr(x,-y); if(d2b2<(dr*rr0)^2) nbrt+=1;
+      
+         d2b2=dist2boxInt(x,y); if(d2b2+(dr*rr0)<0) nbrt1+=1;
+         d2b2=dist2boxInt(x,-y); if(d2b2+(dr*rr0)<0) nbrt1+=1;
+      } 
+      
+      r=sqrt(x*x+y*y);
+      if(k){
+         k=0;
+         xx=x1*x1-y1*y1+cx;y1=2*x1*y1+cy;x1=xx;
+         if((x-x1)^2+(y-y1)^2<2^-40) {
+            pfound=1;
+            break;
+         }
+      } else k=1;
+      i++;
+   }
+   if(r>2){
+      if(i<miniter) return _FORGET;
+      de=getExteriorLowerBound(x,y,cx,cy,dx,dy);
+      if(de>rr0){
+         if(nbrt1>0) return _TRAPPED;
+         if(nbrt>0) return _SUBDIV;
+         return _FORGET;
+      } else return _SUBDIV;
+   }
+   //if(pfound==0) return 0;
+   p=0.5*(i+1);//return 2*p/1000;
+   
+   j=i;i=0;
+   x1=x;y1=y;
+   while(i<p+1 && r-dr*rr0<2){
+      dxx=2*(x*dx-y*dy)+1;dy=2*(x*dy+y*dx);dx=dxx;
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+            
+      dr=sqrt(dx*dx+dy*dy);
+      if(i>=accumAfter){
+         d2b2=dist2boxSqr(x,y); if(d2b2<(dr*rr0)^2) nbrt+=1;
+         d2b2=dist2boxSqr(x,-y); if(d2b2<(dr*rr0)^2) nbrt+=1;
+      
+         d2b2=dist2boxInt(x,y); if(d2b2+(dr*rr0)<0) nbrt1+=1;
+         d2b2=dist2boxInt(x,-y); if(d2b2+(dr*rr0)<0) nbrt1+=1;
+      }  
+      
+      r=sqrt(x*x+y*y);
+      if((x-x1)^2+(y-y1)^2<2^-40) {
+         pfound=1;
+         break;
+      }
+      i++;j++;
+   }
+   if(r>2){
+      if(j<miniter) return _FORGET;
+      de=getExteriorLowerBound(x,y,cx,cy,dx,dy);
+      if(de>rr0){
+         if(nbrt1>0) return _TRAPPED;
+         if(nbrt>0) return _SUBDIV;
+         return _FORGET;
+      } else return _SUBDIV;
+   }
+   if(pfound==0) return _SUBDIV;
+   p=(i+1);
+   de=getInteriorLowerBound(x,y,cx,cy,p);
+   if(de>rr0) return _FORGET;
+   return _SUBDIV;
+}
+getExteriorLowerBound(x,y,cx,cy,dx,dy){
+   r2=x*x+y*y;
+   while(r2<2^10){
+      dxx=2*(x*dx-y*dy)+1;dy=2*(x*dy+y*dx);dx=dxx;
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+      r2=x*x+y*y;
+   }
+   r=sqrt(r2);dr=sqrt(dx*dx+dy*dy);
+   0.5*log(r)*r/dr;
+}
+/** http://usuarios.multimania.es/llopsite/BuddhaBrotA2.htm
+   * Calculates a lower bound for the distance between C 
+   * and the closest point in the border of M.
+   * @param cycle double[][] - C's periodic cycle.
+   * @return double - The interior distance estimation.
+   */
+getInteriorLowerBound(x,y,cx,cy,period) {
+    // Real and imaginary components for complex numbers D1, D2, D3, and D4;
+    // and temporary variables to store the complex numbers in recursion.
+    double Zr, Zi, D1r, D1i, D2r, D2i, D3r, D3i, D4r, D4i;
+    double D1rT, D1iT, D2rT, D2iT, D3rT, D3iT, D4rT, D4iT;
+
+    // Initial values:  D1 = 1;  D2 = 0;  D3 = 0;  D4 = 0;
+    D1r = 1;
+    D1i = D2r = D2i = D3r = D3i = D4r = D4i = 0;
+
+    // Start iterating.
+    for (i = 0; i < period; i++) {
+      // No need to iterate Z; values are already in 'cycle'.
+      //Zr = cycle[i][0];
+      //Zi = cycle[i][1];
+
+      // D1 = 2 * Z * D1;
+      D1rT = 2 * (x * D1r - y * D1i);
+      D1iT = 2 * (y * D1r + x * D1i);
+
+      // D2 = 2 * Z * D2 + 1;
+      D2rT = 2 * (x * D2r - y * D2i) + 1;
+      D2iT = 2 * (y * D2r + x * D2i);
+
+      // D3 = 2 * (D1^2 + Z * D3);
+      D3rT = 2 * ((x * D3r - y * D3i) + (D1r * D1r - D1i * D1i));
+      D3iT = 2 * ((x * D3i + y * D3r) + (2 * D1r * D1i));
+
+      // D4 = 2 * (D1 * D2 + Z * D4);
+      D4rT = 2 * ((x * D4r - y * D4i) + (D1r * D2r - D1i * D2i));
+      D4iT = 2 * ((x * D4i + y * D4r) + (D1r * D2i + D1i * D2r));
+
+      // Update variables.
+      D1r = D1rT;  D1i = D1iT;
+      D2r = D2rT;  D2i = D2iT;
+      D3r = D3rT;  D3i = D3iT;
+      D4r = D4rT;  D4i = D4iT;
+      
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+    }
+
+    // A = 1 - |D1|^2;
+    double A = 1 - (D1r * D1r + D1i * D1i);
+    // B = |D4 + D3 * (D2 / (1 - D1))|;
+    double B = (1 - D1r) * (1 - D1r) + D1i * D1i;
+    D1rT = (D2r * (1 - D1r) - D2i * D1i) / B;
+    D1iT = (D2i * (1 - D1r) + D2r * D1i) / B;
+    D2rT = D4r + (D3r * D1rT - D3i * D1iT);
+    D2iT = D4i + (D3i * D1rT + D3r * D1iT);
+    B    = sqrt(D2rT * D2rT + D2iT * D2iT);
+
+    // Return lower bound -that is, 1/4 the estimated bound.
+    return A / (4.0 * B);
+  }
+//////////////////////////////////////////////////////////////////////////////  
+mandel(cx,cy,rr0){
+   if((cx+1)^2+cy^2<0.25^2){
+      DE=0.25-sqrt((cx+1)^2+cy^2);
+      if(DE>rr0) return _FORGET; else return _SUBDIV;
+   }
+   q = (cx-0.25)^2 + cy^2;
+   if (q*(q+(cx-0.25)) < (0.5*cy)^2){
+      //z=0.5*(1+-sqrt(1-4*c))
+      dx=1-4*cx; dy=-4*cy;
+      dt=0.5*atan2(dy,dx); dr=(dx^2+dy^2)^0.25;
+      dx=-dr*cos(dt); dy=-dr*sin(dt);
+      x=1+dx; y=dy;
+      //DE=0.25*(0.5-2*|z|^2)*|1-2*z|, DE=0.25*b, b=0.5*(1-|w|^2)*|1-w|
+      r2=x^2+y^2;
+      DE=0.25*(1-r2);//should be DE=0.125*(1-r2); but it gives good results this way
+      x=1-x; y=-y;
+      DE*=sqrt(x^2+y^2);
+      if(DE>rr0) return _FORGET; else return _SUBDIV;
+   }
+   maxit=min(maxiter,max(100,1/rr0));
+   x=cx;y=cy;
+   
+   dx=1;dy=0;
+   h=0;
+   dh=0;
+   r=sqrt(x*x+y*y);
+   dr=sqrt(dx^2+dy^2);
+   rr=rr0;rr1=rr0;
+   drr2=dh*rr0;
+   rr2=dr*rr0+h*rr0^2;
+   i=1;
+   
+   nbrt=0; nbrt1=0;
+   if(i>=accumAfter){
+         dr1=1.2*dr;
+         //if(rr2<4*bhwx)
+         {
+            d2b2=dist2boxSqr(x,y); if(d2b2<rr2^2) nbrt+=1;
+            d2b2=dist2boxSqr(x,-y); if(d2b2<rr2^2) nbrt+=1;
+         }
+      
+         d2b2=dist2boxInt(x,y); if(d2b2-rr2<0) nbrt1+=1;
+         d2b2=dist2boxInt(x,-y); if(d2b2-rr2<0) nbrt1+=1;
+      }
+   
+   if(r<rr2 && dr-drr2<0) return _SUBDIV;
+   while(i<=maxit && r-dr*rr0<2){
+      
+      dh=2*(r*dh+dr^2+(dh+h)*dr*rr0+h*dh*rr0^2);
+      h=dr^2+(2*r+(2*dr+h*rr0)*rr0)*h;
+      
+      dxx=2*(dx*x-dy*y)+1;
+      dy=2*(dx*y+dy*x);dx=dxx;
+      
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;
+      i++;
+            
+      r=sqrt(x*x+y*y);
+      dr=sqrt(dx^2+dy^2);
+      rr2=dr*rr0+h*rr0^2;
+      drr2=dh*rr0;
+      
+      if(i>=accumAfter){
+         dr1=1.1*dr;
+         //if(rr2<4*bhwx)
+         {
+            d2b2=dist2boxSqr(x,y); if(d2b2<rr2^2) nbrt+=1;//sample touches the trap
+            d2b2=dist2boxSqr(x,-y); if(d2b2<rr2^2) nbrt+=1;
+         }
+      
+         d2b2=dist2boxInt(x,y); if(d2b2-rr2<0) nbrt1+=1;//sample completely inside the trap
+         d2b2=dist2boxInt(x,-y); if(d2b2-rr2<0) nbrt1+=1;
+      }
+      
+      if(r-rr2<0 && dr-drr2<0) return _SUBDIV; 
+   }
+   
+   if (i<=miniter) return _FORGET;
+   if (i>=maxiter) return _FORGET;
+   if (nbrt1>0) return _TRAPPED;
+   if (nbrt>0) return _SUBDIV;
+   return _FORGET;
+}
+//////////////////////////////////////////////////////////////////////////////
+enum {SeedStackDepth=1000};
+static SeedStack[SeedStackDepth][4];
+static SeedStackPtr=0;
+SeedPush(x,y,hw,depth){
+   if(SeedStackPtr<SeedStackDepth){
+      SeedStack[SeedStackptr][0]=x;
+      SeedStack[SeedStackptr][1]=y;
+      SeedStack[SeedStackptr][2]=hw;
+      SeedStack[SeedStackptr][3]=depth;
+      SeedStackptr+=1;
+   } else printf("boomPush! %g. %g\n",SeedStackptr, hw);// else error!
+}
+SeedPop(&x,&y,&hw,&depth){
+   if(SeedStackPtr>0){
+      SeedStackptr-=1;
+      x=SeedStack[SeedStackptr][0];
+      y=SeedStack[SeedStackptr][1];
+      hw=SeedStack[SeedStackptr][2];
+      depth=SeedStack[SeedStackptr][3];
+   } else printf("boomPop!");// else error!
+}
+Seedtop(&x,&y,&hw,&depth){
+   if(SeedStackPtr>0 && SeedStackPtr<=SeedStackDepth){
+      ptr=SeedStackptr-1;
+      x=SeedStack[ptr][0];
+      y=SeedStack[ptr][1];
+      hw=SeedStack[ptr][2];
+      depth=SeedStack[ptr][3];
+   } // else error!
+}
+
+static pcoord[4][2]={-1,-1,-1,1,1,-1,1,1};
+static permut4[24][4]={0,1,2,3,0,1,3,2,0,2,1,3,0,2,3,1,0,3,1,2,0,3,2,3,1,0,2,3,1,0,3,2,1,2,0,3,1,2,3,0,1,3,0,2,1,3,2,0,2,0,1,3,2,0,3,1,2,1,0,3,2,1,3,0,2,3,0,1,2,3,1,0,3,0,1,2,3,0,2,1,3,1,0,2,3,1,2,0,3,2,0,1,3,2,1,0};
+
+GetSeed(&x, &y, depth){
+   //depth=12;
+   auto cx,cy,cr,curDepth;
+   do{
+      if(SeedStackPtr==0) {SeedPush(0,0,2,0); nbrTours++;}//-1.7685,-0.0035,0.0025//0,0,2
+      SeedPop(cx,cy,cr,curDepth);
+      res=mandel(cx,cy,cr*sqrt(2));
+      
+      if(res==_FORGET) {
+         continue;
+      }
+   
+      if(curDepth>=depth || res==_TRAPPED){
+         x=2*(rnd-0.5)*cr+cx;
+         y=2*(rnd-0.5)*cr+cy;
+         //if(rnd>0.9) SeedPush(cx, cy, cr, curDepth);
+         return;
+      }
+      
+      if(res==_SUBDIV ) {
+         cr*=0.5; curDepth+=1;
+         i=floor(rnd*24);
+         tx=pcoord[permut4[i][0]][0]; ty=pcoord[permut4[i][0]][1];
+         SeedPush(cx+tx*cr, cy+ty*cr, cr, curDepth);
+         tx=pcoord[permut4[i][1]][0]; ty=pcoord[permut4[i][1]][1];
+         SeedPush(cx+tx*cr, cy+ty*cr, cr, curDepth);
+         tx=pcoord[permut4[i][2]][0]; ty=pcoord[permut4[i][2]][1];
+         SeedPush(cx+tx*cr, cy+ty*cr, cr, curDepth);
+         tx=pcoord[permut4[i][3]][0]; ty=pcoord[permut4[i][3]][1];
+         SeedPush(cx+tx*cr, cy+ty*cr, cr, curDepth);
+      }
+   } while (1);
+}
+//////////////////////////////////////////////////////////////////////////////
+GetSeed1(&x, &y, depth){
+   depth1=depth;
+   nbrtry=1000;
+   for(i=0;i<nbrtry;i++){
+      auto cx=0,cy=0,cr=2;
+      depth=depth1;
+      do{
+         res=mandel(cx,cy,cr*sqrt(2));
+         if(res==_FORGET) {//random try
+            break;
+         }
+         if(depth==0) {//current cell touches the trap or last depth
+            x=2*(rnd-0.5)*cr+cx;
+            y=2*(rnd-0.5)*cr+cy;
+            return;
+         }
+         if(res==_TRAPPED) {//current cell touches the trap or last depth
+            x=2*(rnd-0.5)*cr+cx;
+            y=2*(rnd-0.5)*cr+cy;
+            return;
+         }
+         cr*=0.5;
+         cx+=sgn(rnd-0.5)*cr;
+         cy+=sgn(rnd-0.5)*cr;
+         depth--;
+      } while(1);
+   }
+   if(i==nbrtry){
+      x=4*(rnd-0.5);
+      y=4*(rnd-0.5);
+   }
+}
+//////////////////////////////////////////////////////////////////
+seeds_props(&total,&inside,&outside){
+   total=nbr_seeds;inside=0;outside=0;
+   for(i=0;i<nbr_seeds;i++){
+      x=tab_seeds[i][0];
+      y=tab_seeds[i][1];
+      if(tab_seeds[i][2]>maxiter) outside++;
+      else if(tab_seeds[i][3]) inside++;
+           else outside++;
+   }
+}
+transition_probability(length0,length1){
+   (1-(maxiter-length0))/(1-(maxiter-length1)/maxiter)
+}
+mutate11(x,y,&x1,&y1,sigma){
+   u=(1-rnd); v=rnd;
+   r=sqrt(-2*log(u))*sigma;
+   phi=v*pi*2;
+   x1=x+r*cos(phi);
+   y1=y+r*sin(phi);
+}
+mutate10(x,y,&x1,&y1){
+   r=nrnd*0.005/mag;//-log(1-rnd)*0.005/mag;//
+   phi=rnd*pi*2;
+   x1=x+r*cos(phi);
+   y1=y+r*sin(phi);
+}
+mutate1(x,y,&x1,&y1){
+   x1=x;y1=y;
+   r1=0.0001/mag;
+   r2=0.005/mag;
+   phi=rnd*pi*2;
+   r=r2*exp(-log(r2/r1)*rnd);
+   x1+=r*cos(phi);
+   y1+=r*sin(phi);
+}
+mutate2(x,y,&x1,&y1){
+   x1=(rnd-0.5)*5;
+   y1=(rnd-0.5)*5;
+}
+mutate3(x,y,&x1,&y1){
+   getSeed1(x1,y1,16)
+}
+new_generation(){
+#if 0
+   auto x,y,l,it,itDE,itOw;
+   for(i=0;i<nbr_seeds;i++){
+      getSeed(x,y,8);
+      f=mandeliterBT(x,y,l,it,itDE,itOw);
+      if(f) mandelacc(x,y,1,it,itDE);
+   }
+#else
+   for(i=0;i<nbr_seeds;i++){
+      
+      lx=tab_seeds[i][0];
+      ly=tab_seeds[i][1];
+      ll=tab_seeds[i][2];
+      lf=tab_seeds[i][3];
+      lit=tab_seeds[i][4];
+      litDE=tab_seeds[i][5];
+      litOw=tab_seeds[i][6];
+      
+      //if(lf) mandelacc(lx,ly,ll,lit,litDE);
+      
+      nx=0;ny=0;nl=0;nit=0;nitDE=0;nitOw=0;nf=0;
+
+      tcp=9/10;
+      if(rnd<tcp)
+         for(k=0;k<1;k++){
+            mutate11(lx,ly,nx,ny,2*litOw);
+            nf=mandeliterBT(nx,ny,nl,nit,nitDE,nitOw);
+            if (nf>0) break;
+         }
+      else
+         for(k=0;k<1;k++){
+            mutate3(lx,ly,nx,ny);
+            nf=mandeliterBT(nx,ny,nl,nit,nitDE,nitOw);
+            if (nf>0) break;
+         }
+         
+      dr2=(nx-lx)^2+(ny-ly)^2;
+      ntp=1;//1/(litOw^2)*1/(2*pi)*tcp*exp(max(-10,-dr2/(2*litOw^2)))+(1-tcp)*100/16*(nx>-2. && nx<2. && ny>-2. && ny<2.);
+            
+      //nf=mandeliterBT(nx,ny,nl,nit,nitDE,nitOw);
+      if(nf) mandelacc(nx,ny,nl,nit,nitDE);
+      
+      ltp=1;//1/(nitOw^2)*1/(2*pi)*tcp*exp(max(-10,-dr2/(2*nitOw^2)))+(1-tcp)*100/16*(lx>-2. && lx<2. && ly>-2. && ly<2.);
+      
+      //num=ntp*nf*nl; den=ltp*lf*ll;
+      num=nf*nl; den=lf*ll;
+      
+      if(den<=num) {num=1;den=1;}
+      
+      if(num>rnd*den) {
+         tab_seeds[i][0]=nx; tab_seeds[i][1]=ny;
+         tab_seeds[i][2]=nl; tab_seeds[i][3]=nf;
+         tab_seeds[i][4]=nit; tab_seeds[i][5]=nitDE; tab_seeds[i][6]=nitOw;
+      }
+   }
+#endif
+}

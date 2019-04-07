@@ -1,0 +1,22 @@
+//Ctrl-p to load a picture
+static a=-sin(4*pi/5),b=cos(4*pi/5),c=sin(4*pi/5);
+static phi=0.5*(1+sqrt(5));
+(x,y,&r,&g,&b){
+   n=10;k=1/phi^n;
+   x*=k;y*=k;
+   x+=0.5;
+   for(i=0;i<n;i++) iter(x,y);
+   
+   pic(x*256+mousx,mousy-y*256,r,g,b)
+}
+iter(&x,&y){
+   
+   t=2*min(0,a*x+b*y+c);
+   x-=t*a; y-=t*b;
+   y=abs(y);
+   x*=phi;y*=phi;
+   x=phi-x;
+   t=2*min(0,a*x+b*y+c);
+   x-=t*a; y-=t*b;
+   y=abs(y);
+}

@@ -1,0 +1,131 @@
+enum {expo=8};
+enum {Tabsize=2048};
+()
+{
+   Ts=2^expo;
+   static tr[Tabsize][Tabsize],ti[Tabsize][Tabsize];
+   if (numframes==0){
+      for(l=0;l<Ts;l++)for(c=0;c<Ts;c++){
+         x=2*c;if(x>Ts)x-=2*Ts;x/=Ts;
+         y=2*l;if(y>Ts)y-=2*Ts;y/=Ts;
+         r=rnd;t=rnd*PI;
+         tr[l][c]=r*cos(t);
+         ti[l][c]=r*sin(t);
+      }
+      FFT2D(tr,ti,-1,expo);
+      for(l=0;l<Ts;l++)for(c=0;c<Ts;c++){
+         x=2*c;if(x>Ts)x-=2*Ts;x/=Ts;
+         y=2*l;if(y>Ts)y-=2*Ts;y/=Ts;
+         r=100/(10000*(x*x+y*y)+1);
+         tr[l][c]*=r;
+         ti[l][c]*=r;
+      }
+      FFT2D(tr,ti,1,expo);
+   }
+   cls(0);
+   for(l=0;l<Ts;l++)for(c=0;c<Ts;c++){
+      rco=tr[l][c]*128+128;
+      ico=ti[l][c]*128+128;
+      setcol(rco,rco,rco);
+      setpix(c,l);
+   }
+}
+FFT2D(re[Tabsize][Tabsize],im[Tabsize][Tabsize],dir,m){
+   static x[Tabsize],y[Tabsize];
+   n=2^m;
+   //horizontal scan
+   for(l=0;l<n;l++){
+      for(c=0;c<n;c++){
+         x[c]=re[l][c]; y[c]=im[l][c];
+      }
+      FFT(x,y,dir,m);
+      for(c=0;c<n;c++){
+         re[l][c]=x[c]; im[l][c]=y[c];
+      }
+   }
+   //vertical scan
+   for(c=0;c<n;c++){
+      for(l=0;l<n;l++){
+         x[l]=re[l][c]; y[l]=im[l][c];
+      }
+      FFT(x,y,dir,m);
+      for(l=0;l<n;l++){
+         re[l][c]=x[l]; im[l][c]=y[l];
+      }
+   }
+}
+/* After P. Bourke
+   http://local.wasp.uwa.edu.au/~pbourke/other/dft/
+   This computes an in-place complex-to-complex FFT 
+   x and y are the real and imaginary arrays of 2^m points.
+   dir =  1 gives forward transform
+   dir = -1 gives reverse transform 
+*/
+FFT(x[Tabsize],y[Tabsize],dir,m)
+{
+   if(Tabsize<2^m) return;
+   static n,i,i1,j,k,i2,l,l1,l2;
+   static c1,c2,tx,ty,t1,t2,u1,u2,z;
+   if(2^m>Tabsize) return;
+   /* Calculate the number of points */
+   n = 2^m;
+   /*for (i=0;i<m;i++) 
+      n *= 2;*/
+
+   /* Do the bit reversal */
+   i2 = n/2;
+   j = 0;
+   for (i=0;i<n-1;i++) {
+      if (i < j) {
+         tx = x[i];
+         ty = y[i];
+         x[i] = x[j];
+         y[i] = y[j];
+         x[j] = tx;
+         y[j] = ty;//bof! on aurait pu employer une seule variable intermediaire
+      }
+      k = i2;
+      while (k <= j) {
+         j -= k;
+         k /=2;
+      }
+      j += k;
+   }
+
+   /* Compute the FFT */
+   c1 = -1.0; 
+   c2 = 0.0;
+   l2 = 1;
+   for (l=0;l<m;l++) {
+      l1 = l2;
+      l2 *= 2;
+      u1 = 1.0; 
+      u2 = 0.0;
+      for (j=0;j<l1;j++) {
+         for (i=j;i<n;i+=l2) {
+            i1 = i + l1;
+            t1 = u1 * x[i1] - u2 * y[i1];
+            t2 = u1 * y[i1] + u2 * x[i1];
+            x[i1] = x[i] - t1; 
+            y[i1] = y[i] - t2;
+            x[i] += t1;
+            y[i] += t2;
+         }
+         z =  u1 * c1 - u2 * c2;//on reconnait qque chose comme sin(a+b) et cos(a+b)
+         u2 = u1 * c2 + u2 * c1;
+         u1 = z;
+      }
+      c2 = sqrt((1.0 - c1) / 2.0);
+      if (dir == 1) 
+         c2 = -c2;
+      c1 = sqrt((1.0 + c1) / 2.0);
+   }
+
+   /* Scaling for forward transform */
+   if (dir == 1) {
+      for (i=0;i<n;i++) {
+         x[i] /= n;
+         y[i] /= n;
+      }
+   }
+}

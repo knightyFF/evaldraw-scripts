@@ -1,0 +1,247 @@
+(x,y,&r,&g,&b)
+{
+   static theta=1.570796,phi=0,Dist=6,focal=8;
+   static qtheta=1.570796,qphi=0,qr=-0.5,qim=-0.7;
+   static O[3],vi[3],vj[3],vk[3],vt[3],O2=0;  
+   static bradius=2;
+   static juliac[4];
+   static esc_r=100,max_iter=30;
+   static frm=-1;
+   static mx,my,mz;
+   eps=1e-3;
+   //Should not be static with hyper threading
+   //static p0,p1,p2,p3;
+   //static v0,v1,v2;
+   //static tmp0,tmp1,tmp2,tmp3;
+   //static gr0,gr1,gr2,gr3;
+   
+   if (numframes>frm)
+   {
+      frm=numframes;
+      if (keystat(0x36)){ //Right Shift
+         readmouse(mx,my,mz);
+         theta+=mx*0.01;
+         phi-=my*0.01;
+         Dist+=mz*0.001;
+      } else if (keystat(0x2a)){ // left Shift
+         readmouse(mx,my,mz);
+         qr +=mx*0.002;
+         qim+=my*0.002;
+         
+      } else if (keystat(0x1d)){ // Left Ctrl
+         readmouse(mx,my,mz);
+         qtheta+=mx*0.01;
+         qphi  +=my*0.01;
+      } else readmouse(mx,mx,mx);
+      juliac[0]=qr;
+      juliac[1]=qim*cos(qphi)*cos(qtheta);
+      juliac[2]=qim*cos(qphi)*sin(qtheta);
+      juliac[3]=qim*sin(qphi);
+      O[0]=dist*cos(phi)*cos(theta);
+      O[1]=dist*cos(phi)*sin(theta);
+      O[2]=dist*sin(phi);
+      O2=O[0]*O[0]+O[1]*O[1]+O[2]*O[2];
+      vk[0]=-cos(phi)*cos(theta);
+      vk[1]=-cos(phi)*sin(theta);
+      vk[2]=-sin(phi);
+      vi[0]=-sin(theta);
+      vi[1]= cos(theta);
+      vi[2]= 0;
+      vj[0]=-sin(phi)*cos(theta);
+      vj[1]=-sin(phi)*sin(theta);
+      vj[2]=cos(phi);
+      vt[0]=focal*vk[0];
+      vt[1]=focal*vk[1];
+      vt[2]=focal*vk[2];
+      rjc=sqrt(juliac[0]^2+juliac[1]^2+juliac[2]^2+juliac[3]^2);
+      bradius=0.5*(1+sqrt(1+4*rjc));
+   }
+   r=0;g=0;b=0;
+   //generates ray and transforms it
+   v0=x*vi[0]+y*vj[0]+vt[0];
+   v1=x*vi[1]+y*vj[1]+vt[1];
+   v2=x*vi[2]+y*vj[2]+vt[2];
+   d1=1/sqrt(v0*v0+v1*v1+v2*v2);
+   v0*=d1;v1*=d1;v2*=d1;
+   //intersect with bounding sph with radius bradius
+   bp=v0*O[0]+v1*O[1]+v2*O[2];
+   c=O2-bradius*bradius;
+   Sd=bp*bp-c;//Delta
+   if (Sd<0) return 0;
+   Sd=sqrt(Sd);
+   dmin=max(0,-bp-Sd);dmax=-bp+Sd;
+   d=dmin;
+   nn=0;Dj=10000;mDj=100000;nDJ=-100000;aDj=1000;
+   while(1){
+      nn++; 
+      p0=v0*d+O[0];
+      p1=v1*d+O[1];
+      p2=v2*d+O[2];
+      p3=0;
+      //DJ=getJuliaDist(p,juliac,4,10);
+      {
+         gr0=1; gr1=0; gr2=0; gr3=0;
+         i=0;//DJ=0;z=0;
+         for(i=0;i<max_iter;i++) {  
+            //qmul(p,g,tmp);
+            //qrmul(2,tmp,g);
+            {
+               tmp0=2*(p0*gr0-p1*gr1-p2*gr2-p3*gr3);
+               tmp1=2*(p0*gr1+p1*gr0+p2*gr3-p3*gr2);
+               tmp2=2*(p0*gr2+p2*gr0+p3*gr1-p1*gr3);
+               tmp3=2*(p0*gr3+p3*gr0+p1*gr2-p2*gr1);
+               gr0=tmp0;gr1=tmp1;gr2=tmp2;gr3=tmp3;
+            }
+            //qsqr(p,tmp);qadd(tmp,c,p);
+            {
+               tmp0=p0*p0-(p1*p1+p2*p2+p3*p3);
+               tmp1=p0*p1*2;
+               tmp2=p0*p2*2;
+               tmp3=p0*p3*2;
+               p0=tmp0+juliac[0];p1=tmp1+juliac[1];
+               p2=tmp2+juliac[2];p3=tmp3+juliac[3];
+            }
+            
+            z=p0*p0+p1*p1+p2*p2+p3*p3;
+            if (z>esc_r) break;
+         }
+            z1=gr0*gr0+gr1*gr1+gr2*gr2+gr3*gr3;
+            //if(z1<1) z1=1;
+            DJ=0.25*log(z)*sqrt(z/z1);//*pow(z,-1/(4*i));//same as: z=sqrt(z);DJ=0.5*z*log(z)/sqrt(z1);//
+      }
+      if(Dj<mDj) mDj=Dj;if(Dj>nDj) nDj=Dj;
+      //if(Dj>1.5*aDj) Dj=aDj;
+      d+=DJ;              
+      aDj=Dj;
+      if (DJ<d*eps) {mi1=i;eps=d*eps*0.1;break;}
+      if (d>dmax) goto finally; 
+              
+   } 
+//goto finally;
+//shading
+   //eps=1e-5;
+   //mi1=min(15,max_iter);//15;//0.5*max_iter;
+   p0=v0*d+O[0]-eps;
+   p1=v1*d+O[1];
+   p2=v2*d+O[2];
+   p3=0;
+{  
+   iter=0;
+   do {
+      tmp0=p0*p0-(p1*p1+p2*p2+p3*p3);
+      tmp1=p0*p1*2;
+      tmp2=p0*p2*2;
+      tmp3=p0*p3*2;
+      p0=tmp0+juliac[0];p1=tmp1+juliac[1];
+      p2=tmp2+juliac[2];p3=tmp3+juliac[3];
+      iter++;
+   }while(iter<mi1);
+}
+dj=sqrt(p0*p0+p1*p1+p2*p2+p3*p3);
+   p0=v0*d+O[0]+eps;
+   p1=v1*d+O[1];
+   p2=v2*d+O[2];
+   p3=0;
+{
+   iter=0;
+   do {
+      tmp0=p0*p0-(p1*p1+p2*p2+p3*p3);
+      tmp1=p0*p1*2;
+      tmp2=p0*p2*2;
+      tmp3=p0*p3*2;
+      p0=tmp0+juliac[0];p1=tmp1+juliac[1];
+      p2=tmp2+juliac[2];p3=tmp3+juliac[3];
+      iter++;
+   }while(iter<mi1);
+}
+djx=sqrt(p0*p0+p1*p1+p2*p2+p3*p3)-dj;
+
+   p0=v0*d+O[0];
+   p1=v1*d+O[1]-eps;
+   p2=v2*d+O[2];
+   p3=0;
+{
+   iter=0;
+   do {
+      tmp0=p0*p0-(p1*p1+p2*p2+p3*p3);
+      tmp1=p0*p1*2;
+      tmp2=p0*p2*2;
+      tmp3=p0*p3*2;
+      p0=tmp0+juliac[0];p1=tmp1+juliac[1];
+      p2=tmp2+juliac[2];p3=tmp3+juliac[3];
+      iter++;
+   }while(iter<mi1);
+}
+dj=sqrt(p0*p0+p1*p1+p2*p2+p3*p3);
+   p0=v0*d+O[0];
+   p1=v1*d+O[1]+eps;
+   p2=v2*d+O[2];
+   p3=0;
+{
+   iter=0;
+   do {
+      tmp0=p0*p0-(p1*p1+p2*p2+p3*p3);
+      tmp1=p0*p1*2;
+      tmp2=p0*p2*2;
+      tmp3=p0*p3*2;
+      p0=tmp0+juliac[0];p1=tmp1+juliac[1];
+      p2=tmp2+juliac[2];p3=tmp3+juliac[3];
+      iter++;
+   }while(iter<mi1);
+}
+djy=sqrt(p0*p0+p1*p1+p2*p2+p3*p3)-dj;
+
+   p0=v0*d+O[0];
+   p1=v1*d+O[1];
+   p2=v2*d+O[2]-eps;
+   p3=0;
+{
+   iter=0;
+   do {
+      tmp0=p0*p0-(p1*p1+p2*p2+p3*p3);
+      tmp1=p0*p1*2;
+      tmp2=p0*p2*2;
+      tmp3=p0*p3*2;
+      p0=tmp0+juliac[0];p1=tmp1+juliac[1];
+      p2=tmp2+juliac[2];p3=tmp3+juliac[3];
+      iter++;
+   }while(iter<mi1);
+}
+dj=sqrt(p0*p0+p1*p1+p2*p2+p3*p3);
+   p0=v0*d+O[0];
+   p1=v1*d+O[1];
+   p2=v2*d+O[2]+eps;
+   p3=0;
+{
+   iter=0;
+   do {
+      tmp0=p0*p0-(p1*p1+p2*p2+p3*p3);
+      tmp1=p0*p1*2;
+      tmp2=p0*p2*2;
+      tmp3=p0*p3*2;
+      p0=tmp0+juliac[0];p1=tmp1+juliac[1];
+      p2=tmp2+juliac[2];p3=tmp3+juliac[3];
+      iter++;
+   }while(iter<mi1);
+}
+djz=sqrt(p0*p0+p1*p1+p2*p2+p3*p3)-dj;
+
+
+dj=1/sqrt(djx*djx+djy*djy+djz*djz);
+djx*=dj;djy*=dj;djz*=dj;
+dj=abs((djx+djy+djz)*(1/sqrt(3)));
+dj=0.6*dj+0.4*dj^50;//dj*=1.6;
+r=(dj+0.3*djx)*256; g=(dj+0.3*djy)*256; b=(dj+0.3*djz)*256;
+return;
+////////////////////   
+   finally:
+   //r=nn*10; g=nDj*10;b=mDj*100; return;
+   //r=mDJ*128;g=abs(256-2*r);if(dj-mDj) b=255;else b=nn*10;return;
+   r=exp(-10*mDj)*.8*256;g=r;b=r;return;
+   p0=v0*d+O[0];
+   p1=v1*d+O[1];
+   p2=v2*d+O[2];
+   d=dj*(dist-d+bradius)*128;
+   r=d*abs(p0);g=d*abs(p1);b=d*abs(p2);
+   
+}

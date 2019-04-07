@@ -1,0 +1,67 @@
+static bailout=10000;
+static maxiter=256;
+enum{nbrpt=2^16};
+static tpt[nbrpt][3];
+static frm=-1;
+static zom=150;
+(){
+   if(numframes==0){
+      cls(0);
+      for(i=0;i<nbrpt;i++){
+         x=(rnd-0.5)*4;
+         y=(rnd-0.5)*4;
+         tpt[i][2]=mbde(x,y,maxiter,bailout);
+         tpt[i][0]=x;
+         tpt[i][1]=y;
+      }
+   }
+   cls(0);
+   displaypt();
+   mutatept();
+}
+displaypt(){
+   for(i=0;i<nbrpt;i++){
+      setpix(tpt[i][0]*zom+0.5*xres,0.5*yres-tpt[i][1]*zom);
+   }
+}
+mutatept(){
+   for(i=0;i<nbrpt;i++){
+      x=tpt[i][0];
+      y=tpt[i][1];
+      d=tpt[i][2];
+      if(d<=0 || d>1 || rnd<0.0){
+         x=(rnd-0.5)*4;
+         y=(rnd-0.5)*4;
+         tpt[i][2]=mbde(x,y,maxiter,bailout);
+         tpt[i][0]=x;
+         tpt[i][1]=y;
+      }else{
+         x+=max(d,2^-20)*nrnd;
+         y+=max(d,2^-20)*nrnd;
+         tpt[i][2]=mbde(x,y,maxiter,bailout);
+         tpt[i][0]=x;
+         tpt[i][1]=y;
+      }
+   }
+}
+mbde(x,y,mi,bo){
+   cx=x;cy=y;
+   i=mi;
+   dx=1;dy=0;
+   r2=x*x+y*y;
+   while(i>0 && r2<bo){
+      dxx=2*(x*dx-y*dy)+1;
+      dy=2*(x*dy+y*dx);
+      dx=dxx;
+      xx=x*x-y*y+cx;
+      y=2*x*y+cy;
+      x=xx;
+      r2=x*x+y*y;
+      i--;
+   }
+   //return r2^(0.5^(mi-i));
+   r=sqrt(r2);
+   dr=sqrt(dx*dx+dy*dy);
+   if(r2>4) d=0.5*r*log(sqrt(r2-4))/dr; else d=0;
+   d
+}

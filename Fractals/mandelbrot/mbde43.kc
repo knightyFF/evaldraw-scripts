@@ -1,0 +1,78 @@
+static maxiter=400;
+static bailout=100;
+static n=-1;
+static frm=-1;
+static mj=0;
+static bri=100;
+static diskrad=.5;
+static ltim=0;
+(x,y,&r,&g,&b){
+   if(frm<numframes){
+      frm=numframes;
+      tim=klock();
+      dtim=tim-ltim; ltim=tim; dtim*=20;
+      //maxiter=floor(mousx*0.1);
+      mj=(2*mousx>xres);
+      if(keystatus[0x02]) bri*=1.1^dtim;
+      if(keystatus[0x03]) bri*=1/(1.1^dtim);
+      if(keystatus[0x04]) diskrad*=1*1.1^dtim;
+      if(keystatus[0x05]) diskrad*=1/(1.1^dtim);
+      if(keystatus[0x06]) {maxiter+=1; keystatus[0x06]=0;}
+      if(keystatus[0x07]) {maxiter-=1; keystatus[0x07]=0;}
+   }
+   cx=-1.76184222423668; cy=0.01398336892314;
+   x+=cx; y+=cy;
+if(mj)
+   {cx=x;cy=y;}
+//else
+//   {cx=-.1566492; cy=1.0417899;}
+
+   //x-=cx; y-=cy;
+   d2r=d2disk(x,y,diskrad);
+   dx=1;dy=0;
+   i=maxiter;
+   r2=x*x+y*y;
+   while(i>0 && r2<bailout){
+      dxx=2*(x*dx-y*dy);
+      if(mj) dxx+=1;
+      dy=2*(x*dy+y*dx);
+      dx=dxx;
+      xx=x*x+n*y*y+cx;
+      y=2*x*y+cy;
+      x=xx;
+      dr=sqrt(dx*dx+dy*dy);
+      if(r2<4){
+         //dr=sqrt(dx*dx+dy*dy);
+         d2r=min(d2r,d2disk(x,y,diskrad)/dr);
+      } 
+      else{
+         rr = d2disk(x,y,diskrad);
+         d2r=min(d2r,rr*log(rr+diskrad)/dr);
+      }
+      r2=x*x+y*y;
+      i--;
+   }
+   r=sqrt(r2);
+   dr=sqrt(dx*dx+dy*dy);
+   //if(r2>4) d=0.5*r*log(sqrt(r2-4))/dr; else d=0;*/
+   //if(r2>4) d=r2^(0.5^(maxiter-i+1))-1; else d=0;
+   //d^0.125
+   //i/maxiter
+   //d=1/2^(maxiter-i)*(log(r))+(1-2^(1/2^(maxiter)));
+   //d=0.5*(r-2)*log(r+1)/dr;
+   //d=r^(1/2^(maxiter-i))-2^(1/2^(maxiter-i));
+   //d=0.5*r*(log(r)-2^(-i)*log(2))/dr;
+   d=0.5*r*(log(r)-2^(-i)*log(2))/dr;
+   //(maxiter-i)/maxiter
+   //bri*d^0.25
+   
+   //d2r=min(d2r,d);
+   d2r=max(0,1-bri*d2r);
+   r=255*(1-d2r); g=r; b=r;
+}
+d2disk(x,y,r){
+   rc=sqrt(x*x+y*y)-r;
+   rc=abs(rc);
+   //1-rc
+   //max(0,(1-.05*rc))
+}

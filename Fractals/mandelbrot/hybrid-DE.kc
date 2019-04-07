@@ -1,0 +1,38 @@
+(x,y){
+   static s=1,scl=1.5;
+   static mr2,mx,my,frm=-1;
+   if(frm<numframes){
+      frm=numframes;
+      mx=(mousx-0.5*xres)*0.01;
+      my=(0.5*yres-mousy)*0.01;
+      mr2=abox(mx,my,s,-s,s,-s,s*scl,s*0.25,s*1)^2;
+   }
+   if((x-mx)^2+(y-my)^2<mr2) return 0;
+   abs(abox(x,y,s,-s,s,-s,scl,s*0.25,s*1))^0.25
+}
+abox(x,y,a,b,c,d,s,minr2,maxr2){
+   cx=x;cy=y;
+   r2=x*x+y*y;dr=1;ne=0;
+   for(i=0;i<20 && r2<2^15;i++){
+            
+      x=x-2*min(a,max(b,x));
+      y=y-2*min(c,max(d,y));
+      r2=x*x+y*y;
+      k=min(maxr2/minr2,max(1,maxr2/r2));
+      k*=s;
+      dr=dr*abs(k);//+1;
+      x=x*k;//+cx;
+      y=y*k;//+cy;
+      r2=x*x+y*y;
+      r=sqrt(r2);
+      dr=2*r*dr+1;//max(0.1*dr,2*r*dr+1);//
+      t=atan2(y,x);
+      x=r^2*cos(2*t)+cx;
+      y=r^2*sin(2*t)+cy;
+      ne++;
+      r2=x*x+y*y;
+   }
+   r=sqrt(r2);
+   if(ne>8) return 0.5*r*log(r)/dr;
+   0.5*r*2^ne*(r^(2^(-ne))-1)/(dr*r^(2^(-ne)));
+}

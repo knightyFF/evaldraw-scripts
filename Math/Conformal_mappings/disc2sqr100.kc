@@ -1,0 +1,163 @@
+//Bad but working implementation of the method for conformal map from unit disc to square
+//reference:
+// "Fast and Stable Conformal Mapping between a Disc and a Square"
+// by Michael M. Stark.
+// Journal of Graphics, GPU, & Game Tools, 14(2), 2009, pages 1–23.
+// http://www.cs.utah.edu/~mstark/papers/
+//Note: there is a bug in the peudo-code in the article.
+(){
+   cls(0);
+   drawit(200);
+}
+drawit(zf){
+   setcol(0xffff00);
+   for(r=0;r<1;r+=0.099999){
+      t=0;
+      Disc2Sqr(r,t,x1,y1);
+      x1=0.5*xres-x1*zf;
+      y1=0.5*yres-y1*zf;
+      moveto(x1,y1);
+      for(t=0;t<=2*PI+0.001;t+=PI*0.0025){
+         Disc2Sqr(r,t,x1,y1);
+         x1=0.5*xres-x1*zf;
+         y1=0.5*yres-y1*zf;
+         lineto(x1,y1);
+      }
+   }
+   setcol(0x00ffff);
+   for(t=0;t<=2*PI;t+=PI*0.05){
+      r=0;
+      Disc2Sqr(r,t,x1,y1);
+      x1=0.5*xres-x1*zf;
+      y1=0.5*yres-y1*zf;
+      moveto(x1,y1);
+      for(r=0;r<1;r+=0.004999999){
+         Disc2Sqr(r,t,x1,y1);
+         x1=0.5*xres-x1*zf;
+         y1=0.5*yres-y1*zf;
+         lineto(x1,y1);
+      }
+   }
+
+}
+//Used constants
+
+#define _K_ 1.854074677301372 // = F ( PI/2 | 1/2 )
+#define _R0_ 0.6636
+
+Disc2Sqr(r,th,&rw,&iw){//Almost exact transcription of the pseudo-code.
+   auto rz,iz;
+   if(r<_R0_){// Region 1: use the central power series
+      rz=r*cos(th+0.25*PI);
+      iz=r*sin(th+0.25*PI);
+      SumSeries(rz,iz,rw,iw,floor(6.5/(1-r)-2));
+      rr=sqrt(2)/_K_; ir=-sqrt(2)/_K_;
+      qmul(rw,iw,rr,ir,rw,iw);
+   } else {
+      // Transform to Quadrant IV
+      Q=(floor(2*th/PI)+0.5)*0.5*PI;// find the quadrant
+      // rotate to Quadrant IV, and by sqrt(i)
+      rz=r*cos(th-Q);
+      iz=r*sin(th-Q);
+      // "Flip" to apply the power series, if possible
+      auto rz2,iz2;
+      auto rxi,ixi;
+      qsqr(rz,iz,rz2,iz2);
+      rxi=1-rz2;ixi=-iz2;
+      qinv(1+rz2,iz2,rz2,iz2);
+      qmul(rz2,iz2,rxi,ixi,rxi,ixi);
+      qsqrt(rxi,ixi,rxi,ixi);
+      xir=qabs(rxi,ixi);
+      if(xir<_R0_){
+         // Region 2: use the power series on xi
+         SumSeries(rxi,ixi,rw,iw,floor(6.5/(1-xir)-2));
+         rw=_K_/sqrt(2)-rw; iw=-iw;
+      }else{
+         a=sqrt((rz+1)^2+iz^2); b=sqrt((rz-1)^2+iz^2);
+         a1=0.5*(a+b); b1=0.5*(a-b);//alpha and beta
+         g=a1+sqrt(a1*a1-1);//gamma=alpha+sqrt(alpha^2-1)
+         tp=(1-b1^2)/b1^2;//tan(phi)^2
+         b=2/tp+(g-1/g)^2/(4*(1-b1^2))-1;//b=2*cot(phi)^2+sinh(psi)^2*csc(pho)^2-1
+         cl=0.25*(b+sqrt(b^2+8/tp));//cot(lambda)^2
+         tm=2*(tp*cl-1);//tan(mu)^2
+         tl=sqrt(1/cl);//tg(lambda) 
+         tm=sqrt(tm);//tg(mu)
+         rw=F(tl); iw=F(tm);
+         rw=1/sqrt(2)*(_K_-rw); iw=-1/sqrt(2)*iw;//Bug in the pseudo-code : In the paper they forgotten to specify that one should multiply by sqrt(2)/2
+         // Adjust for the octant above the real axis
+         if(iz>0) iw=-iw;
+      }
+      // Rotate back to the original quadrant, and scale by 2*sqrt(i)/K
+      // (Q contains the rotation by sqrt(-i)
+      qmul(rw,iw,2/_K_*cos(Q),2/_K_*sin(Q),rw,iw);
+   }
+}
+
+F(t){//F(atan(t)|0.5)
+   n=4;
+   //f0=t*(1-t^2*(0.193-0.025*t^2));
+   f0=t/(1+0.172*t*t);
+   a=1; b=sqrt(0.5);aaa=0;
+   for(i=0;i<n;i++){
+      //aa=a+b;b=sqrt(a*b);aaa=a;a=aa;
+      t=(a+b)*t/(a-b*t^2);
+      aa=0.5*(a+b);b=sqrt(a*b);aaa=a;a=aa;
+   }
+   phi=atan(t);
+   return (phi+pi*floor(0.5+(2^n*a*f0-phi)/pi))/(2^n*a);
+}
+
+SumSeries(rz,iz,&rs,&is,n){
+   auto rs=rz,is=iz;
+   auto rp=rz,ip=iz;
+   auto rz4,iz4;
+   qsqr(rz,iz,rz4,iz4);qsqr(rz4,iz4,rz4,iz4);
+   for(k=1;k<=n;k++){
+      t=(2*k-1)/(2*k);
+      qmul(rp,ip,rz4,iz4,rp,ip);rp*=t;ip*=t;
+      t=1/(4*k+1);
+      rs+=rp*t;is+=ip*t;
+   }
+}
+//Complex numbers functions////////////////////////////////////////////////////
+qadd(x0,y0,x1,y1,&xo,&yo){
+   xo=x0+x1;
+   yo=y0+y1;
+}
+
+qmul(x0,y0,x1,y1,&xo,&yo){
+   xo=x0*x1-y0*y1;
+   yo=x0*y1+x1*y0;
+}
+
+qabs2(x,y){
+   x*x+y*y;
+}
+
+qabs(x,y){
+   sqrt(x*x+y*y);
+}
+
+qsqr(x,y,&xo,&yo){
+   xo=x*x-y*y;yo=2*x*y;
+}
+
+qsqrt(x,y,&xo,&yo){
+   r=qabs2(x,y)^0.25;
+   t=0.5*atan2(y,x);
+   xo=r*cos(t);yo=r*sin(t);
+   //if(y<0){xo=-xo;yo=-yo;}
+   
+}
+
+qsqrt1(x,y,&xo,&yo){
+   r=qabs(x,y);
+   xo=sqrt(0.5*(r+x));
+   yo=sgn(y)*sqrt(0.5*(r-x));
+   //if(y<0){xo=-xo;yo=-yo;}
+}
+
+qinv(x,y,&xo,&yo){
+   r=1/qabs2(x,y);
+   xo=x*r; yo=-r*y;
+}

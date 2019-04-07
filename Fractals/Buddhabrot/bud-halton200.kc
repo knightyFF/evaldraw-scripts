@@ -1,0 +1,146 @@
+enum{resx=800,resy=800};
+static buf[resx][resy][3];
+static zoom=0.75;
+static zom;
+static cx=-.250,cy=0.;
+static n=1;//nbr of passes
+static npt=2*2^19;//nbr of samples per pass
+(){
+   if(numframes==0){
+      cls(102580);
+      for(l=0;l<resy;l++)
+      for(c=0;c<resx;c++){
+         buf[l][c][0]=0;
+         buf[l][c][1]=0;
+         buf[l][c][2]=0;
+      }
+   }
+   zom=zoom*resy*0.5;
+   static iter=0;
+   if(iter<1000){
+      calcit(0,npt,5000,100,9000);
+      calcit(1,npt,500,50,900);
+      calcit(2,npt,100,1,90000);
+      iter+=1;
+      n+=npt;
+   }
+   
+   drawit(0.05*zoom*zoom*resx*resy/n);
+   
+   moveto(0,0);setcol(0xffffff); printnum(iter);
+}
+halton1(index,base){//from wiki pseudo code (http://en.wikipedia.org/wiki/Halton_sequences)
+   result=0;
+   f=1/base;
+   i=index;
+   while (i>0){
+      result+=f*(i%base);
+      i=floor(i/base);
+      f=f/base;
+   }
+   return result;
+}
+halton(index,base){//from wiki pseudo code (http://en.wikipedia.org/wiki/Halton_sequences)
+   result=0;
+   ib=1/base;
+   f=ib;
+   i=index;
+   while (i>0){
+      i1=i*ib;
+      i=floor(i1);
+      result+=f*(i1-i)*base;
+      f*=ib;
+   }
+   return result;
+}
+static index[3]={0,0,0};
+rndx(indx){
+   result=0;
+   f=0.5;
+   i=index[indx];
+   while (i>0){
+      i1=i*0.5;
+      i=floor(i1);
+      result+=f*(i1-i)*2;
+      f*=0.5;
+   }
+   return result;
+}
+rndy(indx){
+   index[indx]+=1;
+   result=0;
+   f=1/3;
+   i=index[indx];
+   while (i>0){
+      i1=i*1/3;
+      i=floor(i1);
+      result+=f*(i1-i)*3;
+      f*=1/3;
+   }
+   return result;
+}
+calcit(indx,nbrpt,niter,miniter,bailout){
+   
+   for(i=0;i<max(1,nbrpt*2^-16);i++){
+      rx=rndx(indx);ry=rndy(indx);
+      //rx=rnd;ry=rnd;
+      for(l=0;l<2^8;l++)
+      for(c=0;c<2^8;c++)
+      {
+         x=((c+rx)*2^-8)*4-2;y=((l+ry)*2^-8)*2;
+         //x=((c+rnd)*2^-8)*4-2;y=((l+rnd)*2^-8)*4-2;
+         //x=rnd*4-2;y=rnd*4-2;
+         //sbuf(x,y,indx);continue;
+         j=escape(x,y,x,y,niter,bailout);
+         if(j==0) continue;
+         if(niter-j<miniter) continue;
+         xc=x;yc=y;
+         sbuf(x,y,indx);
+         do{
+            //sbuf(x,y,indx);
+            if(x*x+y*y>4) break;
+            xx=x*x-y*y+xc;
+            yy=2*x*y+yc;
+            x=xx;y=yy;
+            j--;
+            sbuf(x,y,indx);
+         }while(j>0);
+         //sbuf(x,y,indx);
+      }
+   }
+}
+escape(x,y,xc,yc,niter,bailout){
+   q = (x-0.25)*(x-0.25) + y*y;
+   if (((x+1)*(x+1) + y*y < 0.0625)||(q*(q+(x-0.25)) < 0.25*y*y)){
+      r=0;
+      return 0;
+   }
+   k=niter;
+   while(k>0){
+      if(x*x+y*y>bailout) break;
+      xx=x*x-y*y+xc;
+      yy=2*x*y+yc;
+      x=xx;y=yy;
+      k--;
+   }
+   k
+}
+sbuf(x,y,index){
+   sx=(0.5*resx)+(x-cx)*zom;
+   sy=(0.5*resy)+(cy-y)*zom;
+   if(sx>=0 && sx<resx && sy>=0 && sy<resy)
+      buf[sy][sx][index]+=1;
+   sy=(0.5*resy)+(cy+y)*zom;
+   if(sx>=0 && sx<resx && sy>=0 && sy<resy)
+      buf[sy][sx][index]+=1;
+}
+drawit(bright){
+   for(l=0;l<resy;l++)
+      for(c=0;c<resx;c++){
+         r=buf[l][c][0]*bright; r=4*(256-256/(r+1));
+         g=buf[l][c][1]*bright; g=4*(256-256/(g+1));
+         b=buf[l][c][2]*bright; b=4*(256-256/(b+1));
+         setcol(r,g,b);
+         setpix(c,l);
+      }
+}

@@ -1,0 +1,163 @@
+//limited to 32. it doesn't work well above. numerically ill conditionned?
+#define POLYDEGMAX 128
+#define POLYDEG 30
+#define TOL 1e-3
+#define NITERMAX 100
+//#define USE_ROOTS
+static tabr[POLYDEGMAX][2];//={1,0, 2,1, 3,0, 1,0, -1,1};
+static tabp[POLYDEGMAX][2];//={1,0,-5,0,1,0,1,0,1,0};//assume leading coefficient is 1
+static tabs[POLYDEGMAX][2];
+static nbriter=0;
+static zoom=250;
+static totN;
+static NpPp=2^15;
+(){
+   if(numframes==0){
+      cls(0);
+      totN=0;   
+   }
+   //cls(0);
+   //r=0; g=0; b=0;
+   
+   if(totN>=2^(POLYDEG-0)) 
+      {
+         moveto(0,0); setcol(0xFFFFFF);
+         printf("F. %10.0f",totN);
+         return;
+      }
+   for(j=0;j<NpPp;j++)
+   {
+      initpolyes();
+      nbriter=DurandKerner();
+      if(nbriter==NITERMAX) continue;//sometimes it fails
+      for(i=0; i<POLYDEG; i++){
+         x= tabs[i][0]; y= tabs[i][1];
+         l=1/(x*x+y*y);
+         //if(l>1) continue;//Comment me
+         incpix(x,y); incpix(x,-y);
+         incpix(-x,y); incpix(-x,-y);
+         x*=l; y*=l;
+         incpix(x,y); incpix(x,-y);
+         incpix(-x,y); incpix(-x,-y); 
+      }
+      
+   }
+   totN=totN+NpPp;
+}
+incpix(x,y){
+   sx = x * zoom + xres*0.5;
+   sy = y * zoom + yres*0.5;
+   getpix(sx,sy,r,g,b);
+   r+=1;
+   setcol(r,r,r);
+   setpix(sx,sy);
+}
+initpolyes(){
+   static n=0;
+   k=n;
+   for(i=0; i<POLYDEG; i++){
+      tabr[i][0]=(rnd-0.5)*2; tabr[i][1]=(rnd-0.5)*2;
+      tabs[i][0]=2*rnd-1; tabs[i][1]=2*rnd-1;
+      
+      //tabp[i][0]=(rnd-0.5)*2; tabp[i][1]=(rnd-0.5)*2;
+#if 1
+      tabp[i][0]=floor(rnd*3)-1;//2*floor(rnd*2)-1;
+#else
+      k*=0.5;
+      l=(k-floor(k))*2; k=floor(k);
+   #if 1
+      tabp[POLYDEG-i-1][0]=2*l-1;
+   #else
+      tabp[i][0]=2*l-1;
+   #endif
+#endif
+      tabp[i][1]=0;
+   }
+   n+=1;
+}
+DurandKerner(){
+//init
+   x=0.4; y=-0.9;
+   /*for(i=0; i<POLYDEG; i++){
+      tabs[i][0]=x;//2*rnd-1;//
+      tabs[i][1]=y;//2*rnd-1;//
+      Cmul(x,y,0.4,0.9,x,y);
+   }*/
+   k=0;
+   
+   do{
+      errmax=0;
+      for(j=0; j<POLYDEG; j++){
+         fx=0; fy=0;
+         x=tabs[j][0]; y=tabs[j][1];
+#ifdef USE_ROOTS
+         evalPolyR(x,y,fx,fy);
+#else
+         evalPolyP(x,y,fx,fy);
+#endif
+         ffx=1;ffy=0;
+         for(i=0; i<POLYDEG; i++){
+            if(i!=j){
+               kx=x-tabs[i][0]; ky=y-tabs[i][1];
+               Cmul(kx,ky,ffx,ffy,ffx,ffy);
+            }
+         }
+         Cinv(ffx, ffy, ffx, ffy);//r=1/Cabs(ffx,ffy);//
+         Cmul(fx, fy, ffx, ffy, fx, fy);//fx*=r;fy*=r;//
+         errcur=max(abs(fx), abs(fy));
+         damp = exp(max(-50, -errcur * 0.01));
+         Csub(x, y, damp * fx, damp * fy, x, y);
+         errmax = max(errmax, errcur);
+         tabs[j][0] = x; tabs[j][1] = y;
+      }
+      k++;
+   } while (errmax>TOL && k<NITERMAX);
+   k
+}
+evalpolyM(x,y,&fx,&fy){
+   cx=x;cy=y;fx=0;fy=0;
+   for(i=0;i<7;i++){
+      x=fx*fx-fy*fy+cx;
+      fy=2*fx*fy+cy;
+      fx=x;
+   }
+}
+evalPolyP(x,y,&fx,&fy){
+   fx=1;fy=0;
+   i=POLYDEG;
+   do{
+      Cmul(x,y,fx,fy,fx,fy);
+      i-=1;
+      fx+=tabp[i][0]; fy+=tabp[i][1];
+   } while (i>0);
+}
+evalPolyR(x,y,&fx,&fy){
+   fx=1;fy=0;
+   for(i=0; i<POLYDEG; i++){
+      kx=x-tabr[i][0]; ky=y-tabr[i][1];
+      Cmul(kx,ky,fx,fy,fx,fy);
+   }
+}
+Csum(x0,y0,x1,y1,&x,&y){
+   x=x0+x1;
+   y=y0+y1;
+}
+Csub(x0,y0,x1,y1,&x,&y){
+   x=x0-x1;
+   y=y0-y1;
+}
+Cmul(x0,y0,x1,y1,&x,&y){
+   x=x0*x1-y0*y1;
+   y=x0*y1+x1*y0;
+}
+Cabs2(x,y){
+   x*x+y*y;
+}
+Cabs(x,y){
+   sqrt(x*x+y*y);
+}
+Cinv(x0,y0,&x,&y){
+   y0=-y0;
+   r=1/Cabs2(x0,y0);
+   x=x0*r; y=y0*r;
+}

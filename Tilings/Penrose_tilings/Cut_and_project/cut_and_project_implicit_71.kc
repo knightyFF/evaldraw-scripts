@@ -1,0 +1,171 @@
+enum {N_=5}
+(x,y){
+   static start=1;
+   if(start){start=0; init1();}
+   static frm=-1;
+   if(frm<numframes){ frm=numframes; Init2();}
+   
+   return abs(max(-0.05,test(x, y)))^0.5 * 2;
+}
+
+static udir[N_], vdir[N_], O[N_];//"cutting" plane parameters: u,v directions and Origin
+static u2dir[N_], v2dir[N_], adir[N_];//directions orthogonal to the cutting plane
+static matrices[N_][N_][2][2];
+static factors[N_][N_];
+
+//initializations
+Init1(){
+   t = sqrt(2/N_);
+   ang = 0; ofs=0.*PI;
+   for(i=0; i<N_; i++){
+      vdir[i] = t*cos(ang+ofs);
+      udir[i] = t*sin(ang+ofs);
+      ang += 2 * PI / N_;
+      O[i] = 0.;
+   }
+   
+   for(i=0;i<N_;i++) adir[i]=1/sqrt(N_);
+   
+   u2dir[0]=udir[0]; u2dir[1]=udir[2]; u2dir[2]=udir[1]; u2dir[3]=udir[1]; u2dir[4]=udir[2];
+   v2dir[0]=vdir[0]; v2dir[1]=vdir[2]; v2dir[2]=-vdir[1]; v2dir[3]=vdir[1]; v2dir[4]=-vdir[2];
+   
+   auto m[2][2];
+   for(i=0; i<N_; i++)
+      for(j=0;j<N_;j++){
+         //if(i==j) continue;
+         factors[i][j] = getmatinvinit(i,j,m);
+         matrices[i][j][0][0] = m[0][0];
+         matrices[i][j][1][0] = m[1][0];
+         matrices[i][j][0][1] = m[0][1];
+         matrices[i][j][1][1] = m[1][1];
+      }
+}
+Init2(){
+   for(i=0;i<N_;i++){
+      O[i] = adir[i] * 0.02*mousx;// + v2dir[i] * 0.002*mousy;
+   }
+   
+}
+
+//Gives the coordinates of the point (x,y) on the "cutting" plane into the 5D space
+P2E5(x,y,p[N_]){
+   for(i=0; i<N_; i++)
+      p[i] = O[i] + x * udir[i] + y * vdir[i];
+}
+
+//given a point p, return the nearest vertex in the lattice and the offset.
+getRoundAndOffest(p[N_],ip[N_],ofs[N_]){
+   for(i=0; i<N_; i++){
+      ip[i] = floor(p[i]+.5);
+      ofs[i] = p[i] - ip[i];
+   }
+}
+
+//project the vector ofs onto the plane (udir,vdir)
+projectOfs(ofs[N_], pofs[2]){
+   //dot products
+   pofs[0]=0; pofs[1]=0;
+   for(i=0; i<N_; i++){
+      pofs[0] += ofs[i] * udir[i];
+      pofs[1] += ofs[i] * vdir[i];
+   }
+}
+
+getdir(ofs[N_], dir[N_]){
+   for(i=0; i<N_; i++){
+      dir[i] = (ofs[i] > 0) - .5;
+   }
+}
+
+section(i,j,p[N_],ip[N_], si, sj){
+   
+   auto ofs[N_], q[N_], delta[N_];
+   auto pofs[2], lhs[2];
+   auto u[2], v[2];
+   auto m[2][2];
+
+   f = getmatinv(i,j,m);
+   
+   //check intersection with dual
+   lhs[0] = si + ip[i] - O[i]; lhs[1] = sj + ip[j] - O[j];
+   s = m[0][0]*lhs[0]+m[0][1]*lhs[1];
+   t = m[1][0]*lhs[0]+m[1][1]*lhs[1];
+   P2E5(s,t,q);
+         
+   for(k=0; k<N_; k++){
+      q[k] = floor(q[k]+.5);
+      if(k==i)      ofs[k] = p[k] - (ip[k] + (si - .5));
+      else if(k==j) ofs[k] = p[k] - (ip[k] + (sj - .5));
+           else     ofs[k] = p[k] -  q[k];
+   }
+         
+   projectOfs(ofs, pofs);
+         
+   s = pofs[0]*m[0][0]+pofs[1]*m[1][0];
+   t = pofs[0]*m[0][1]+pofs[1]*m[1][1];
+   
+   d1 = max(abs(s-.5)-.5,abs(t-.5)-.5)*f;
+   return d1;
+}
+
+getmatinvinit(i,j,n[2][2]){
+   auto m[2][2];
+   m[0][0] = udir[i]; m[1][0] = udir[j];
+   m[0][1] = vdir[i]; m[1][1] = vdir[j];
+   
+   u2 = m[0][0]*m[0][0] + m[0][1]*m[0][1];
+   v2 = m[1][0]*m[1][0] + m[1][1]*m[1][1]; 
+   uv = m[0][0]*m[1][0] + m[0][1]*m[1][1];
+   f = sqrt(u2 - uv*uv / v2);
+   
+   det = m[0][0]*m[1][1] - m[0][1]*m[1][0];
+   det = 1/det;
+   n[0][0] = det * m[1][1];
+   n[1][1] = det * m[0][0];
+   n[0][1] = -det * m[0][1];
+   n[1][0] = -det * m[1][0];
+   return f;
+}
+getmatinv(i,j,n[2][2]){
+   n[0][0] = matrices[i][j][0][0];
+   n[1][0] = matrices[i][j][1][0];
+   n[0][1] = matrices[i][j][0][1];
+   n[1][1] = matrices[i][j][1][1];
+   
+   
+   return factors[i][j];
+}
+
+test(x, y){
+   auto p[N_], ip[N_], ofs[N_], dir[N_];
+   
+   P2E5(x,y,p);
+   
+   getRoundAndOffest(p,ip,ofs);
+   
+   getdir(ofs, dir);
+   
+
+   for(i=0; i<N_-1; i++)
+      for(j=i+1; j<N_; j++){
+         d1 = section(i,j,p,ip,dir[i],dir[j]);
+         if(d1 < 0.) return d1;
+      }
+   for(i=0; i<N_-1; i++)
+      for(j=i+1; j<N_; j++){
+         d1 = section(i,j,p,ip,-dir[i],dir[j]);
+         if(d1 < 0.) return d1;
+      }
+   for(i=0; i<N_-1; i++)
+      for(j=i+1; j<N_; j++){
+         d1 = section(i,j,p,ip,dir[i],-dir[j]);
+         if(d1 < 0.) return d1;
+      }
+   for(i=0; i<N_-1; i++)
+      for(j=i+1; j<N_; j++){
+         d1 = section(i,j,p,ip,-dir[i],-dir[j]);
+         if(d1 < 0.) return d1;
+      }
+   
+   return 0;
+}

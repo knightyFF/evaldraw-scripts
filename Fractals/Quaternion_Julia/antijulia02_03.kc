@@ -1,0 +1,223 @@
+() //press F1 for help
+{
+   static jA=0,jB=0,jPhi=0.0,a,b,c;
+   static viewscale=200,setscale=100;
+   enum {nbr_jpt=100000};
+   static jpt[nbr_jpt][3];
+   static recalc=1;
+   static mx,my,mz;
+
+   if (1)
+   {
+      readmouse(mx,my);
+      if (keystat(0x2a)){
+      if (abs(mx)>0 || abs(my)>0 || abs(mz)>0)
+         {
+            if (bstatus==1) jPhi+=0.01*mx;
+            else {jA+=mx*0.01;jB-=my*0.01;}
+            recalc=1;
+         }
+      }
+      else mcam2(mx,my);
+   }
+   
+   if (recalc)
+   {
+       recalc=0;
+       A=RND*100;B=RND*100;Theta=PI;//2*PI*RND;
+       x=A;z=B*cos(Theta);y=B*sin(Theta);
+       a=jA;c=jB*cos(jPhi);b=jB*sin(jPhi);
+       
+       for (i=0; i<100; i++){
+          x-=a;y-=b;z-=c;
+          r=sqrt(x*x+y*y+z*z);
+          r1=1/r;x*=r1;y*=r1;z*=r1;
+          r=sqrt(r);
+          m=sqrt(y*y+z*z);e=sqrt(0.5*(1+x));g=sqrt(0.5*(1-x));
+          if (m==0){x=r;y=0;z=0;}
+          else {x=r*e;y=r*y*g/m;z=r*z*g/m;}
+          if (1){
+             x1=x-a;y1=y-b;z1=z-c;
+             r1=sqrt(x1*x1+y1*y1+z1*z1);
+             r11=1/r1;x1*=r11;y1*=r11;z1*=r11;
+             r1=sqrt(r1);
+             m=sqrt(y1*y1+z1*z1);e=sqrt(0.5*(1+x1));g=sqrt(0.5*(1-x1));
+             if (m==0){x1=r1;y1=0;z1=0;}
+             else {x1=r1*e;y1=r1*y1*g/m;z1=r1*z1*g/m;}
+             p1=1/sqrt(x1*x1+y1*y1+z1*z1);
+             
+             x1=-x-a;y1=-y-b;z1=-z-c;
+             r1=sqrt(x1*x1+y1*y1+z1*z1);
+             r11=1/r1;x1*=r11;y1*=r11;z1*=r11;
+             r1=sqrt(r1);
+             m=sqrt(y1*y1+z1*z1);e=sqrt(0.5*(1+x1));g=sqrt(0.5*(1-x1));
+             if (m==0){x1=r1;y1=0;z1=0;}
+             else {x1=r1*e;y1=r1*y1*g/m;z1=r1*z1*g/m;}
+             p2=1/sqrt(x1*x1+y1*y1+z1*z1);
+             p1=p1/(p1+p2);p2=1-p1;
+             if (RND<p2){x=-x;y=-y;z=-z;}
+          }
+          //s=rdm();
+          //x*=s;y*=s;z*=s;
+       }
+       for (i=0; i<nbr_jpt/2; i++){
+          x-=a;y-=b;z-=c;
+          r=sqrt(x*x+y*y+z*z);
+          r1=1/r;x*=r1;y*=r1;z*=r1;
+          r=sqrt(r);
+          m=sqrt(y*y+z*z);e=sqrt(0.5*(1+x));g=sqrt(0.5*(1-x));
+          if (m==0){x=r;y=0;z=0;}
+          else {x=r*e;y=r*y*g/m;z=r*z*g/m;}
+          jpt[2*i][0]=x*setscale;jpt[2*i+1][0]=-x*setscale;
+          jpt[2*i][1]=y*setscale;jpt[2*i+1][1]=-y*setscale;
+          jpt[2*i][2]=z*setscale;jpt[2*i+1][2]=-z*setscale;
+          if (1){
+             x1=x-a;y1=y-b;z1=z-c;
+             r1=sqrt(x1*x1+y1*y1+z1*z1);
+             r11=1/r1;x1*=r11;y1*=r11;z1*=r11;
+             r1=sqrt(r1);
+             m=sqrt(y1*y1+z1*z1);e=sqrt(0.5*(1+x1));g=sqrt(0.5*(1-x1));
+             if (m==0){x1=r1;y1=0;z1=0;}
+             else {x1=r1*e;y1=r1*y1*g/m;z1=r1*z1*g/m;}
+             r=1+rnd;
+             p1=(x1*x1+y1*y1+z1*z1)^(-1);
+             
+             x1=-x-a;y1=-y-b;z1=-z-c;
+             r1=sqrt(x1*x1+y1*y1+z1*z1);
+             r11=1/r1;x1*=r11;y1*=r11;z1*=r11;
+             r1=sqrt(r1);
+             m=sqrt(y1*y1+z1*z1);e=sqrt(0.5*(1+x1));g=sqrt(0.5*(1-x1));
+             if (m==0){x1=r1;y1=0;z1=0;}
+             else {x1=r1*e;y1=r1*y1*g/m;z1=r1*z1*g/m;}
+             p2=(x1*x1+y1*y1+z1*z1)^(-1);
+             p1=p1/(p1+p2);p2=1-p1;
+             if (RND<p2){x=-x;y=-y;z=-z;}
+          }
+          //s=rdm();
+          //x*=s;y*=s;z*=s;
+       }  
+   }
+   cls(0);//cls(0x808080); 
+   clz(1e16);
+   drawtriedra(100);
+   setcol(0x8f8f8f); 
+   for (i=0; i<nbr_jpt; i++){
+      //setcol(i*10);
+      drawsph(jpt[i][0],jpt[i][1],jpt[i][2],0.25);
+   }
+   setcol(0xff0000);
+   moveto(0,0,0);lineto(a*setscale,b*setscale,c*setscale);
+   setcol(0xffffff);
+   moveto(10,10);printf("Re(C):");moveto(60,10);printnum(jA);
+   moveto(10,20);printf("IM(C):");moveto(60,20);printnum(jB);
+   moveto(10,30);printf("Phi  :");moveto(60,30);printnum(jPhi);
+}
+rdm()
+{
+   a=RND;
+   if (a>0.5) return 1;
+   return -1;
+}
+drawtriedra(l)
+{
+   setcol(255,0,0);
+   moveto(0,0,0);
+   lineto(l,0,0);
+   setcol(0,255,0);
+   moveto(0,0,0);
+   lineto(0,l,0);
+   setcol(0,0,255);
+   moveto(0,0,0);
+   lineto(0,0,l);
+}
+mcam(d)
+{
+   p=-(mousy-yres*0.5)*0.01;
+   t=-pi/2+(mousx-xres*0.5)*0.01;
+   fx=-cos(p)*cos(t);fy=-cos(p)*sin(t);fz=-sin(p);
+   dx=cos(p-pi/2)*cos(t);dy=cos(p-pi/2)*sin(t);dz=sin(p-pi/2);
+   rx=cos(t+pi/2);ry=sin(t+pi/2);rz=0;
+   setcam(-d*fx,-d*fy,-d*fz,rx,ry,rz,dx,dy,dz,fx,fy,fz);
+}
+mcam2(mx,my)
+{
+   static x=0,y=0,d=200;
+   static first=1;
+   static fx,fy,fz,rx,ry,rz,dx,dy,dz;
+   if (first){
+      first=0;
+      p=-y;
+      t=-pi/2+x;
+      fx=-cos(p)*cos(t);fy=-cos(p)*sin(t);fz=-sin(p);
+      dx=cos(p-pi/2)*cos(t);dy=cos(p-pi/2)*sin(t);dz=sin(p-pi/2);
+      rx=cos(t+pi/2);ry=sin(t+pi/2);rz=0;
+   }
+   if (bstatus==1){
+      x+=0.01*mx;y+=0.01*my;
+      p=-y;
+      t=-pi/2+x;
+      fx=-cos(p)*cos(t);fy=-cos(p)*sin(t);fz=-sin(p);
+      dx=cos(p-pi/2)*cos(t);dy=cos(p-pi/2)*sin(t);dz=sin(p-pi/2);
+      rx=cos(t+pi/2);ry=sin(t+pi/2);rz=0;
+   } else if (bstatus>1) d+=my; 
+      setcam(-d*fx,-d*fy,-d*fz,rx,ry,rz,dx,dy,dz,fx,fy,fz);
+}
+qadd(in1[4],in2[4],out[4])
+{
+   out[0]=in1[0]+in2[0];out[1]=in1[1]+in2[1];
+   out[2]=in1[2]+in2[2];out[3]=in1[3]+in2[3];
+}
+qsub(in1[4],in2[4],out[4])
+{
+   out[0]=in1[0]-in2[0];out[1]=in1[1]-in2[1];
+   out[2]=in1[2]-in2[2];out[3]=in1[3]-in2[3];
+}
+qmul(in1[4],in2[4],out[4])
+{
+   out[0]=in1[0]*in2[0]-in1[1]*in2[1]-in1[2]*in2[2]-in1[3]*in2[3];
+   out[1]=in1[0]*in2[1]+in1[1]*in2[0]+in1[2]*in2[3]-in1[3]*in2[2];
+   out[2]=in1[0]*in2[2]+in1[2]*in2[0]+in1[3]*in2[1]-in1[1]*in2[3];
+   out[3]=in1[0]*in2[3]+in1[3]*in2[0]+in1[1]*in2[2]-in1[2]*in2[1];
+}
+qrmul(r,in[4],out[4])
+{
+   out[0]=r*in[0];out[1]=r*in[1];out[2]=r*in[2];out[3]=r*in[3];
+}
+qnormsquared(in[4])
+{
+   return in[0]*in[0]+in[1]*in[1]+in[2]*in[2]+in[3]*in[3];
+}
+qnorm(in[4])
+{
+   return sqrt(in[0]*in[0]+in[1]*in[1]+in[2]*in[2]+in[3]*in[3]);
+}
+qconjugate(in[4],out[4])
+{
+   out[0]=in[0];out[1]=-in[1];out[2]=-in[2];out[3]=-in[3];
+}
+qequate(in[4],out[4])
+{
+   out[0]=in[0];out[1]=in[1];out[2]=in[2];out[3]=in[3];
+}
+qsqrt(in[4],out[4])
+{
+   if (in[1]==0) if (in[2]==0) if (in[3]==0){
+      if (in[0]<0){
+         out[0]=0;out[1]=sqrt(-in[0]);out[2]=0;out[3]=0;
+         return;
+      } else {
+         out[0]=sqrt(in[0]);out[1]=0;out[2]=0;out[3]=0;
+         return;
+      }
+   }
+   a=in[0];
+   b=sqrt(in[1]*in[1]+in[2]*in[2]+in[3]*in[3]);
+   c=sqrt(a*a+b*b);
+   if (a<0){
+      l=sqrt(0.5*(c-a));m=b/(2*l);t=l/b;
+   } else {
+      m=sqrt(0.5*(c+a)); l=b/(2*m); t=l/b;
+      out[0]=m;out[1]=in[1]*t;out[2]=in[2]*t;out[3]=in[3]*t;
+   }
+   out[0]=m;out[1]=in[1]*t;out[2]=in[2]*t;out[3]=in[3]*t;
+}

@@ -1,0 +1,80 @@
+//Triangle group tiling folding process demo
+//Press Ctrl-Enter to reinitialize
+//Then press enter to go to the next step
+//Use with evaldraw: http://advsys.net/ken/download.htm
+
+static c[3]={-sqrt(3)/2,-0.5,sqrt(3)/4};
+static step=-1;//press enter to go to the next step
+static frm=-1;
+(x,y){
+   if(frm<numframes){//executed each frame once
+      frm=numframes;
+      if(keystatus[0x1c]){//enter pressed?
+         keystatus[0x1c]=0;
+         step++;
+      }
+   }
+   if (foldinglines(x,y)) return 1;
+   k=getk(x,y);
+   ax=x;ay=y;
+   fullfold(x,y);
+   
+   //d=y;//distance to 1st mirror line. That is the x axis
+   //d=x;//distance to 2nd mirror line. That is the y axis
+   d=x*c[0]+y*c[1]+c[2];//distance to 3rd mirror line
+    
+   return min(x,min(y,d))^0.25 - 0.25*(1-k);
+}
+foldinglines(x,y){
+   Lw=0.02;
+   if(step==1){
+      reduce(x,y);
+      return x<Lw || y<Lw || abs(x-1.5)<Lw || abs(y-sqrt(3)/2)<Lw;
+   }
+   if(step==3){
+      t=x*c[0]+y*c[1]+c[2];
+      return abs(t)<Lw;
+   }
+   if(step==5) return abs(y)<Lw;
+   if(step==7) return abs(x)<Lw;
+   if(step==9){
+      t=x*c[0]+y*c[1]+c[2];
+      return abs(t)<Lw;
+   }
+}
+getk(x,y){
+   k=1;   
+      
+   if(step>9){t=x*c[0]+y*c[1]+c[2]; if(t<0) return 0;
+   t*=2; x-=t*c[0]; y-=t*c[1];}
+            
+   if(step>7){if(x<0) return 0; x=-x;}
+            
+   if(step>5){if(y<0) return 0; y=-y;}
+      
+   if(step>3){t=x*c[0]+y*c[1]+c[2]; if(t<0) return 0;
+   t*=2; x-=t*c[0]; y-=t*c[1];}
+   
+   if(step>1){ k=x>0 && y>0 && x<1.5 && y<sqrt(3)/2;}
+   k;
+}
+fullfold(&x,&y){
+   reduce(x,y);
+   fold(x,y,c);
+   x=abs(x);
+   y=abs(y);
+   fold(x,y,c);
+}
+reduce(&x,&y){//infinite tiling of the plane
+   tile(x,1.5);
+   tile(y,sqrt(3)/2);
+}
+fold(&x,&y,p[3]){
+   t=x*p[0]+y*p[1]+p[2];
+   t=2*min(t,0);
+   x-=t*p[0];y-=t*p[1];
+}
+tile(&x,a){//infinite fold
+   x-=a;
+   x=abs(x-(2*floor(x*0.5/a)+1)*a);
+}

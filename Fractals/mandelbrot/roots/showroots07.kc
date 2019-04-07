@@ -1,0 +1,99 @@
+static filelength=0;
+static charoffset=0;
+static mbp_order=0;
+static time=0;
+static nbr_roots=0;
+static tabroots[2^22][2];
+#define FILENAME "broots23.txt"
+(){
+   if(numframes==0){
+      cls(0);
+      filelength=getfilsiz(FILENAME);
+      mbp_order=getnumber();
+      time=getnumber();
+      nbr_roots=getnumber();
+      for(i=0; i<nbr_roots; i++){ 
+         tabroots[i][0]=getnumber();
+         tabroots[i][1]=getnumber();
+      }
+      drawroots();
+   }
+   //cls(0);
+   //printnum(tabroots[nbr_roots-1][0]);
+   //drawroots();
+   
+}
+mandel(cx,cy,&x,&y,mi){
+   for(i=0;i<mi;i++){
+      xx=x*x-y*y+cx;
+      y=x*y*2+cy;
+      x=xx;
+   }
+}
+drawroots(){
+   z=300;cx=0.;cy=0;
+   auto r,g,b;
+   for(j=0;j<22;j++)
+   for(i=0; i<nbr_roots; i++){
+      x=tabroots[i][0];
+      y=tabroots[i][1];
+      mandel(x,y,&x,&y,j);
+      x=z*(x-cx)+0.5*xres;
+      y=0.5*yres-z*(y-cy);
+      getpix(x,y,r,g,b);
+      setcol(r+1,g+1,b+1);
+      setpix(x,y);
+   }
+}
+charvalue(){
+   fil(FILENAME,charoffset);
+}
+getchar(){
+   c=fil(FILENAME,charoffset);
+   charoffset+=1;
+   c
+}
+getnumber(){
+   sign=1;
+   mult=1;
+   nbr=0;
+debut:
+   if(charoffset==filelength) return 1e50;
+   c=getchar();
+   n=c-48;
+   if(n>=0 && n<=9){
+      nbr=n;
+      goto nbr_avant_virgule;
+   }
+   if(c==45) {
+      sign=-1;
+      goto debut;
+   }
+   sign=1;
+   goto debut;
+
+nbr_avant_virgule:
+   if(charoffset==filelength) return sign*nbr;
+   c=getchar();
+   n=c-48;
+   if(n>=0 && n<=9){
+      nbr=10*nbr+n;
+      goto nbr_avant_virgule;
+   }
+   if(c==46){
+      mult=1;
+      goto nbr_apres_virgule;
+   }
+   return sign*nbr;
+
+nbr_apres_virgule:
+   if(charoffset==filelength) return sign*nbr;
+   c=getchar();
+   n=c-48;
+   if(n>=0 && n<=9){
+      mult*=0.1;
+      nbr=nbr+mult*n;
+      goto nbr_apres_virgule;
+   }
+   return sign*nbr;
+}

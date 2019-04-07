@@ -1,0 +1,209 @@
+()
+{
+   enum {NBRPT=100,SUCC=2,PREC=3};
+   static pt[NBRPT][4];
+   static outl=0,inl=-1,pll=-1;
+   static nbrsteps=0;
+   if (numframes==0){
+      for (i=0; i<NBRPT; i++){
+         //pt[i][0]=nrnd*50+xres*0.5;
+         //pt[i][1]=nrnd*50+yres*0.5;
+         //pt[i][0]=(rnd-0.5)*300+xres*0.5;
+         //pt[i][1]=(rnd-0.5)*300+yres*0.5;
+         if(1){
+            notok=1;
+            do{
+               x=(rnd-0.5);y=(rnd-0.5);
+               if(x*x+y*y<=0.25) notok=0;
+            }while(notok);
+            pt[i][0]=x*300+xres*0.5;
+            pt[i][1]=y*300+yres*0.5;
+         }
+         pt[i][2]=i+1;
+         pt[i][3]=i-1;
+      }
+      pt[NBRPT-1][2]=0;
+      pt[0][3]=NBRPT-1;
+      //bounds
+      xmin=1000;xmax=0;
+      leftpt=0;rightpt=0;
+      for (i=0; i<NBRPT; i++){
+         if(pt[i][0]>xmax) {rightpt=i;xmax=pt[i][0];}
+         if(pt[i][0]<xmin) {leftpt=i; xmin=pt[i][0];}
+      }
+      
+      if (outl==leftpt)  outl=pt[outl][SUCC];
+      pt[pt[leftpt][PREC]][SUCC]=pt[leftpt][SUCC];
+      pt[pt[leftpt][SUCC]][PREC]=pt[leftpt][PREC];
+      
+      if (outl==rightpt) outl=pt[outl][SUCC];
+      pt[pt[rightpt][PREC]][SUCC]=pt[rightpt][SUCC];
+      pt[pt[rightpt][SUCC]][PREC]=pt[rightpt][PREC];
+      
+      pt[leftpt][SUCC]=rightpt;
+      pt[leftpt][PREC]=rightpt;
+      pt[rightpt][SUCC]=leftpt;
+      pt[rightpt][PREC]=leftpt;
+      
+      pll=leftpt;
+   }
+   cls(0);
+   //DRAW OUT POINTS
+ nout=0;
+ if(outl>=0){  
+   setcol(0xffffff);
+   ptr=outl;
+   do{
+      setpix(pt[ptr][0],pt[ptr][1]);
+      ptr=pt[ptr][SUCC]; nout++;
+   } while(ptr!=outl);
+ }  
+   //DRAW IN POINTS
+ nin=0;
+ if(inl>=0){  
+   setcol(0xff0000);
+   ptr=inl;
+   do{
+      setpix(pt[ptr][0],pt[ptr][1]);
+      ptr=pt[ptr][SUCC];nin++;
+   } while(ptr!=inl);
+ }
+   //DRAW HULL   
+ nhul=0;
+ if(pll>=0){  
+   setcol(0x00ff00);
+   moveto(pt[pll][0],pt[pll][1]);
+   ptr=pll;
+   do{
+      lineto(pt[ptr][0],pt[ptr][1]);
+      ptr=pt[ptr][SUCC];nhul++;
+   }while(ptr!=pll);
+   lineto(pt[ptr][0],pt[ptr][1]);
+ }
+ //INFOS
+ setcol(0xffffff);
+ moveto(10,10);printf("Points outside : %f",nout);
+ moveto(10,30);printf("Points inside  : %f",nin);
+ moveto(10,50);printf("Points in hull : %f",nhul);
+ moveto(10,70);printf("Total Points   : %f",nhul+nin+nout);
+ moveto(10,90);printf("Number of steps: %f",nbrsteps);
+ if(outl==-1){
+    moveto(10,110);setcol(0xff0000);
+    printf("Finished");
+ }
+ //Step by step
+ if(keytest(0x39)==0) return;  
+ 
+ if(outl>-1){  
+    nbrsteps++;
+   //FOR EACH SEG IN HULL SEARCH FOR FARTHEST POINT
+   ptr=pll;
+   do{
+      ptrout=outl;
+      theptr=-1;
+      max=0;
+      do{
+         static p[2],p0[2],p1[2];
+         p0[0]=pt[ptr][0];p0[1]=pt[ptr][1];
+         p1[0]=pt[pt[ptr][succ]][0];p1[1]=pt[pt[ptr][succ]][1];
+         p[0] =pt[ptrout][0]; p[1] =pt[ptrout][1];
+         d=pointsegdist(p,p0,p1);
+         if(d>max){max=d;theptr=ptrout;}
+         ptrout=pt[ptrout][SUCC];
+      }while(ptrout!=outl);
+      if (theptr>-1){
+         if (outl==theptr){
+           if (outl==pt[outl][SUCC]) outl=-1;
+           else outl=pt[outl][SUCC];
+         }
+         pt[pt[theptr][PREC]][SUCC]=pt[theptr][SUCC];
+         pt[pt[theptr][SUCC]][PREC]=pt[theptr][PREC];
+         
+         pt[theptr][SUCC]=pt[ptr][SUCC];
+         pt[theptr][PREC]=ptr;
+         pt[ptr][SUCC]=theptr;
+         pt[pt[theptr][SUCC]][PREC]=theptr;
+         ptr=theptr;
+      }// else inl=outl;
+      ptr=pt[ptr][SUCC];
+   }while((ptr!=pll) && (outl>-1)  );
+   //CONVEXIFY THE HULL
+   //SEARCH FOR INNER POINTS
+  if(outl>-1)
+  if(1){  
+   ptrout=outl;
+   cont=1;
+   do{
+      p[0] =pt[ptrout][0]; p[1] =pt[ptrout][1];
+      ptr=pll;
+      isin=1;//assume current pt is in the hull
+      do{
+         p0[0]=pt[ptr][0];p0[1]=pt[ptr][1];
+         p1[0]=pt[pt[ptr][succ]][0];p1[1]=pt[pt[ptr][succ]][1];
+         d=pointsegdist(p,p0,p1);
+         if(d>0){// no the pt is out
+           isin=0;
+           break;
+         }
+         ptr=pt[ptr][SUCC];
+      }while(ptr!=pll);
+      if(isin){//pt is in the hull: put it in inlist.
+         theptr=ptrout;
+         //Extract thept from outlist
+         if(theptr==outl){//special case
+            if (outl==pt[outl][SUCC]){
+               outl=-1; 
+               cont=0;
+            } else {
+               outl=pt[outl][SUCC];
+               ptrout=outl;
+            }
+         } else {
+            ptrout=pt[ptrout][SUCC];
+            if(ptrout==outl) cont=0;
+         }
+         //if (outl!=-1){
+            pt[pt[theptr][PREC]][SUCC]=pt[theptr][SUCC];
+            pt[pt[theptr][SUCC]][PREC]=pt[theptr][PREC];
+         //}
+         //Insert thept in inlist
+         if (inl==-1){
+            inl=theptr;
+            pt[inl][PREC]=inl;pt[inl][SUCC]=inl;
+         } else{
+            pt[theptr][PREC]=pt[inl][PREC];
+            pt[theptr][SUCC]=inl;
+            pt[pt[inl][PREC]][SUCC]=theptr;
+            pt[inl][PREC]=theptr;
+            inl=theptr;
+         }
+      } else {
+         ptrout=pt[ptrout][SUCC];
+         if(ptrout==outl) cont=0;
+      }
+   }while(cont);
+  } 
+ }
+   
+}
+pointsegdist(p[2],p0[2],p1[2]){
+   static v[2],w[2];
+   v[0]=p1[0]-p0[0]; v[1]=p1[1]-p0[1];
+   w[0]= p[0]-p0[0]; w[1]= p[1]-p0[1];
+   c1=v[0]*w[0]+v[1]*w[1];
+   c2=v[0]*v[0]+v[1]*v[1];
+   b=c1/c2;
+   w[0]=p0[0]+b*v[0];w[1]=p0[1]+b*v[1];
+   w[0]=p[0]-w[0];w[1]=p[1]-w[1];
+   c1=v[0]*w[1]-v[1]*w[0];
+   if(c1>0) return sqrt(w[0]*w[0]+w[1]*w[1]);
+   else return -1;
+}
+keytest(k){
+   static aks[256];
+   ks=keystat(k);
+   r=0;
+   if (aks[k] && (ks==0)) r=1;
+   aks[k]=ks;
+   r;
+}

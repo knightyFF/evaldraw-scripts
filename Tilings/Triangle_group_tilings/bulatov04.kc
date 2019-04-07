@@ -1,0 +1,123 @@
+// using "linear" and "circular" foldings
+//By Nait Merzouk Abdelaziz (AKA knighty) 
+//july 2011
+//
+//Description:
+//
+//Usage:
+//
+//links:
+//
+//Licence:
+//Free!
+//
+//Disclamer:
+//No warranty of any kind of course! ;)
+//
+
+static mi=10;//max iteration
+static l=4;//
+static ratio=0.5;
+static angle=0.0;
+static xc,rx,yc,ry;
+(x,y){
+   static frm=-1;
+   if(frm<numframes){
+      frm=numframes;
+      k=0;
+      if(keystatus[0xc8]){//up
+         ratio+=0.001;k=1;
+         ratio=min(ratio,1);
+      }
+      if(keystatus[0xd0]){//dn
+         ratio-=0.001;k=1;
+         ratio=max(0,ratio);
+      }
+      if(keystatus[0xcd]){//right
+         keystatus[0xcd]=0;
+         l+=1;k=1;
+      }
+      if(keystatus[0xcb]){//left
+         keystatus[0xcb]=0;
+         if(l>3) l-=1;k=1;
+      }
+      if(keystatus[0xc9]){//pgup
+         angle+=0.001;k=1;
+         angle=min(angle,1);
+      }
+      if(keystatus[0xd1]){//pgdn
+         angle-=0.001;k=1;
+         angle=max(angle,0);
+      }
+      if(keystatus[0x4e]){//numpad +
+         keystatus[0x4e]=0;
+         mi+=1;
+      }
+      if(keystatus[0x4a]){//numpad -
+         keystatus[0x4a]=0;
+         if(mi>0) mi-=1;
+      }
+      if(frm==0 || k) init(l,tan(0.5*pi*ratio),0.5*pi*angle);
+   }
+   
+      //if(x*x+y*y>1) return 0;
+      k=bulatov(x,y);
+}
+checker(rf0,rf1,rf2,rf3){
+   //return (1*rf0+1*rf1+1*rf2+1*rf3)/1/mi;//for example
+   //if((rf0+rf1+rf2+rf3)==0) return 10;//in order to show the fundamental domain
+   0.1+0.4*((1*rf0+1*rf1+1*rf2+1*rf3)%2)
+   //(((1*rf0+1*rf1+1*rf2+1*rf3)%2)*0.5-0.5)*(1*rf0+1*rf1+1*rf2+1*rf3)/mi+0.5
+}
+inside(x,y){
+   x=abs(x);y=abs(y);
+   v=(1-x/xc-y/yc>0);
+   x-=xc;
+   r2=x*x+y*y;
+   if(rx>0) k=max(rx*rx/r2,1); else k=min(rx*rx/r2,1);
+   v=v&&(k==1);
+   x+=xc;
+   y-=yc;
+   r2=x*x+y*y;
+   k=max(ry*ry/r2,1);
+   v=v&&(k==1);
+   y+=yc;
+   v+1
+}
+bulatov(&x,&y){
+   ax=x+1;ay=y+1;
+   rf0=0;rf1=0;rf2=0;rf3=0;arf=1;i=0;
+   for(i=0;i<mi && arf!=(rf0+rf1+rf2+rf3);i++){//if current iterate is inside the fundamental triagle we are done
+      arf=(rf0+rf1+rf2+rf3);
+      ax=x;ay=y;
+      //1st fold
+      x=abs(x);rf0+=x!=ax;
+      //2nd fold
+      y=abs(y);rf1+=y!=ay;
+      //3rd fold
+      x-=xc;
+      r2=x*x+y*y;
+      if(rx>0) k=max(rx*rx/r2,1); else k=min(rx*rx/r2,1);
+      rf2+=k!=1;
+      x*=k;y*=k;
+      x+=xc;
+      //4th fold
+      y-=yc;
+      r2=x*x+y*y;
+      k=max(ry*ry/r2,1);rf3+=k!=1;
+      x*=k;y*=k;
+      y+=yc;
+   }
+   (inside(x,y))*checker(rf0,rf1,rf2,rf3)
+}
+init(l,k,angle){
+   c=cos(pi/l);
+   rx=1/sqrt(k*c);
+   ry=sqrt(k/c);
+   xc=sqrt(1+rx*rx);
+   yc=sqrt(1+ry*ry);
+   s=sin(angle);c=cos(angle);
+   xc1=c*xc*(1-s*xc)/((xc-s)^2-(rx*c)^2);
+   rx=(rx*(1-s*xc)/((xc-s)^2-(rx*c)^2));
+   xc=xc1;
+}

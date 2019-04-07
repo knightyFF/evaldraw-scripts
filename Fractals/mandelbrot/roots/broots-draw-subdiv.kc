@@ -1,0 +1,380 @@
+//Some constants and arrays
+#define MAX_ITERATIONS_NUMBER 10000 //should be between 1 and 22
+enum {maxstack=2^22, solTabSiz=2^22, eps=2^-14, epsmult=2^5};//Precision is actually 2^45. The refine stage will give more significant digits.
+                                                             //Note: the required accuracy is related to tha value of MAX_ITERATIONS_NUMBER
+                                                             //     therefore double type would be insufficient when Max iteration is more than 13 or so.
+static stack[maxstack][4];//the stack: Yes it's size is just too exagerated :P.
+static sol[solTabSiz][4];//Array to store the roots.
+static stackIndex=0, solindex=0;//indices in the stacks and roots array.
+static klc=0;//for computing the time it takes.
+static sqrRad=sqrt(2);
+
+static zoom=32000;
+static scx=-.02, scy=0.7;
+(){
+   if(numframes==0) cls(0);
+   solve(MAX_ITERATIONS_NUMBER);
+}
+static curx=0,cury=0;
+pmoveto(x,y){
+   x-=scx; y-=scy;
+   moveto(x*zoom+0.5*xres,0.5*yres-y*zoom);
+}
+plineto(x,y){
+   x-=scx; y-=scy;
+   lineto(x*zoom+0.5*xres,0.5*yres-y*zoom);
+}
+setp(x,y){
+   x-=scx; y-=scy;
+   setpix(x*zoom+0.5*xres,0.5*yres-y*zoom);
+}
+drawsqr(x,y,hw){
+   //setp(x,y);
+   pmoveto(x-hw,y-hw); plineto(x+hw,y-hw); plineto(x+hw,y+hw); plineto(x-hw,y+hw); plineto(x-hw,y-hw);
+}
+//Stack functions
+push(x,y,hw){
+   if(stackIndex<maxstack){
+      stack[stackIndex][0]=x;
+      stack[stackIndex][1]=y;
+      stack[stackIndex][2]=hw;
+      stackIndex+=1;
+      return 1;
+   }
+   0//else error!
+}
+pop(&x,&y,&hw){
+   if(stackIndex>0){
+      stackIndex-=1;
+      x=stack[stackIndex][0];
+      y=stack[stackIndex][1];
+      hw=stack[stackIndex][2];
+      return 1;
+   }
+   0//else error!
+}
+
+//function to store the roots
+store(x,y,hw){
+   if(solindex>0){//check if the current root found is the same as the previous root
+      ax=sol[solindex-1][0];
+      ay=sol[solindex-1][1];
+      ahw=sol[solindex-1][2];
+      if(max(abs(ax-x),abs(ay-y))<=epsmult*eps) return 2;
+   }
+   if(solindex<solTabSiz){
+      sol[solindex][0]=x;
+      sol[solindex][1]=y;
+      sol[solindex][2]=hw;
+      solindex+=1;
+      return 1;
+   }
+   0//else error!
+}
+
+//divide function: divides the current square area into n x n areas.
+//This could be done more carefully in order to avoid the "drift" of the
+//centers of the subdivided areas because of rounding errors.
+//Thats why I use epsmult in the previous function and in the clean() function.
+subdiv(x,y,hw,n,maxiter){
+   //drawsqr(x,y,hw);
+   hwn=hw/n;
+   for(j=0;j<n;j++){
+      yn=y-hwn*(n-2*j-1);
+      for(i=0;i<n;i++){
+         xn=x-hwn*(n-2*i-1);
+         drawsqr(xn,yn,hwn);
+         r=mandelDE(xn,yn,maxiter);if(1.*r<hwn) push(xn,yn,hwn);//Any root in the area?
+         //r=mandelVerif(xn,yn,maxiter,hwn*sqrRad);if(r) push(xn,yn,hwn);
+      }
+   }
+}
+
+solve(maxiter){//The core
+   //1st subdivision is fine
+   push(scx,scy,512/zoom);//subdiv(0,0,2,2,maxiter);//here the first area is centerd at 0,0 and is 4 units wide.
+   auto x,y,hw;
+   i=0;j=0;
+   while(pop(x,y,hw)){
+      //if(hw>0.001 && y>0) drawsqr(x,y,hw);
+      if(hw<0.5*eps){
+         //if(y>0) drawsqr(x,y,hw);
+         //if(y>0) drawsqr(x,y,hw);
+         //if(mandelVerif(x,y,maxiter,hw*sqrRad)) //comment this line --> roots for iterations 0 to maxiter
+         //   store(x,y,hw);//Is it actually a root for the iterations number asked for?
+      }
+      else subdiv(x,y,hw,2,maxiter);
+      i++;
+      //just to be sure it's still working
+      //if(i==1000000){printf("bip ");i=0;j++;}
+      //if(j==20){printf("\n");j=0;}
+      if(solindex==solTabSiz){//shouldn't happen.
+         //printf("Cleaning!");
+         //solindex=clean(0,solindex);
+         return;
+      }
+   }
+}
+
+//return if there is a root for iterations "0 to maxiter" in the disc centered at cx,cy and radius rr0
+//In principle it's enougth to verify only for "maxiter" but because my IA is not perfect there might be
+//some missed roots. This seems to be caused by a "shadowing" phenomenon: the roots for maxiter-1 are usually close of
+//those for maxiter.
+mandel1(cx,cy,maxiter,rr0){
+   x=cx;y=cy;
+   r2=x*x+y*y;
+   r=sqrt(r2);
+   rr1=rr0;
+   if(r<rr1) return 1;
+   i=maxiter-1;
+   while(i>0 && r-rr1<2){
+      
+      rr1=rr0+2*r*rr1+(rr1)^2;//rr1 is the radius of the "interval" around current z.
+      
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;
+      i--;
+            
+      r2=x*x+y*y;
+      r=sqrt(r2);
+      if(r-rr1<0) return 1;
+   }
+   0
+}
+mandelVerif(cx,cy,maxiter,rr0){
+   //maxiter=max(maxiter,1/rr0);
+   x=cx;y=cy;
+   r=sqrt(x*x+y*y);
+   dx=1; dy=0; dr=1;
+   ddx=0; ddy=0; ddr=0;
+   h=0; 
+   rr2=(dr+h*rr0)*rr0;
+   rr1=rr0;
+   i=maxiter-1;
+   if(r-rr2<=0) return 1;
+   while(i>0 && r-rr2<=2){
+      if(r>2){
+         r2=r*r;
+         while (r2<10000){
+            dxx=2*(dx*x-dy*y)+1;
+            dy=2*(dx*y+dy*x);dx=dxx;
+      
+            xx=x*x-y*y+cx;
+            y=2*x*y+cy; x=xx;
+         
+            r2=x*x+y*y;
+         }
+         r=sqrt(r2); dr=sqrt(dx^2+dy^2);
+         DE=0.5*r*log(r)/dr;
+         if(DE>rr0) return 0;
+      }
+   
+      rr1=rr0+2*r*rr1+(rr1)^2;
+      h=dr^2+(2*r+(2*dr+h*rr0)*rr0)*h;
+      
+      dxx=2*(dx*x-dy*y)+1;
+      dy=2*(dx*y+dy*x);dx=dxx;
+      
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;
+      i--;
+
+      r=sqrt(x*x+y*y);
+      dr=sqrt(dx^2+dy^2);
+      rr2=(dr+h*rr0)*rr0;
+      if(r-rr2<=0) return 1;
+   }
+   
+   //if(r-rr2<=0) return 1;
+   0
+}
+mandelVerif2(cx,cy,maxiter,rr0){
+   maxiter=max(maxiter,1/rr0^0.5);
+   x=cx;y=cy;
+   r=sqrt(x*x+y*y);
+   dx=1; dy=0; dr=1;
+   ddx=0; ddy=0; ddr=0;
+   h=0; k=0;
+   rr2=(dr+h*rr0)*rr0;
+   rr3=(dr+(0.5*ddr+k*rr0)*rr0)*rr0;
+   rr1=rr0;
+   i=maxiter-1;
+   while(i>0 && r-rr3<2){
+      if(r>2){
+         r2=r*r;
+         while (r2<10000){
+            dxx=2*(dx*x-dy*y)+1;
+            dy=2*(dx*y+dy*x);dx=dxx;
+      
+            xx=x*x-y*y+cx;
+            y=2*x*y+cy; x=xx;
+         
+            r2=x*x+y*y;
+         }
+         r=sqrt(r2); dr=sqrt(dx^2+dy^2);
+         DE=0.5*r*log(r)/dr;
+         if(DE>rr0) return 0;
+      }
+   
+      rr1=rr0+2*r*rr1+(rr1)^2;
+      h=dr^2+(2*r+(2*dr+h*rr0)*rr0)*h;
+      k=(((k*rr0+ddr)*rr0+2*dr)*k+0.25*ddr^2)*rr0+2*r*k+dr*ddr;
+      
+      ddxx=2*(dx*dx-dy*dy+x*ddx-y*ddy);
+      ddy=2*(2*dx*dy+y*ddx+x*ddy);ddx=ddxx;
+      
+      dxx=2*(dx*x-dy*y)+1;
+      dy=2*(dx*y+dy*x);dx=dxx;
+      
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;
+      i--;
+
+      r=sqrt(x*x+y*y);
+      dr=sqrt(dx^2+dy^2);
+      ddr=sqrt(ddx^2+ddy^2);
+      rr2=(dr+h*rr0)*rr0;
+      rr3=(dr+(0.5*ddr+k*rr0)*rr0)*rr0;
+      if(r-rr3<=0) return 1;
+   }
+   
+   if(r-rr3<=0) return 1;
+   0
+}
+mandelVerif1(cx,cy,maxiter,rr0){
+   x=cx;y=cy;
+   r=sqrt(x*x+y*y);
+   rr1=rr0;
+   i=maxiter-1;
+   while(i>0 && r-rr1<2)
+   {
+      
+      rr1=rr0+2*r*rr1+rr1*rr1;
+      
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;
+      i--;
+            
+      r=sqrt(x*x+y*y);
+   }
+   if(r-rr1<0) return 1;
+   0
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
+mandelDE(x,y,maxiter){
+   cx=x;cy=y;
+   x1=x;y1=y;k=0;
+   dx=1;dy=0;
+   i=0;
+   r2=x*x+y*y;
+   pfound=0;
+   while(i<maxiter && r2<4){
+      dxx=2*(x*dx-y*dy)+1;dy=2*(x*dy+y*dx);dx=dxx;
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+      r2=x*x+y*y;
+      if(k){
+         k=0;
+         xx=x1*x1-y1*y1+cx;y1=2*x1*y1+cy;x1=xx;
+         if((x-x1)^2+(y-y1)^2<2^-80) {
+            pfound=1;
+            break;
+         }
+      } else k=1;
+      i++;
+   }
+   if(r2>4) return getExteriorLowerBound(x,y,cx,cy,dx,dy);//i/maxiter;
+   //if(pfound==0) return 0;
+   p=0.5*(i+1);//return 2*p/1000;
+   
+   i=0;
+   x1=x;y1=y;
+   while(i<p+1 && r2<4){
+      dxx=2*(x*dx-y*dy)+1;dy=2*(x*dy+y*dx);dx=dxx;
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+      r2=x*x+y*y;
+      if((x-x1)^2+(y-y1)^2<2^-80) {
+         pfound=1;
+         break;
+      }
+      i++;
+   }
+   if(r2>4) return getExteriorLowerBound(x,y,cx,cy,dx,dy);//i/maxiter;
+   if(pfound==0) return 0;
+   p=(i+1);
+   getInteriorLowerBound(x,y,cx,cy,p)
+   //return p/10;//maxiter;
+}
+getExteriorLowerBound(x,y,cx,cy,dx,dy){
+   r2=x*x+y*y;
+   while(r2<2^10){
+      dxx=2*(x*dx-y*dy)+1;dy=2*(x*dy+y*dx);dx=dxx;
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+      r2=x*x+y*y;
+   }
+   r=sqrt(r2);dr=sqrt(dx*dx+dy*dy);
+   0.5*log(r)*r/dr;
+}
+/** http://usuarios.multimania.es/llopsite/BuddhaBrotA2.htm
+   * Calculates a lower bound for the distance between C 
+   * and the closest point in the border of M.
+   * @param cycle double[][] - C's periodic cycle.
+   * @return double - The interior distance estimation.
+   */
+getInteriorLowerBound(x,y,cx,cy,period) {
+    // Real and imaginary components for complex numbers D1, D2, D3, and D4;
+    // and temporary variables to store the complex numbers in recursion.
+    double Zr, Zi, D1r, D1i, D2r, D2i, D3r, D3i, D4r, D4i;
+    double D1rT, D1iT, D2rT, D2iT, D3rT, D3iT, D4rT, D4iT;
+
+    // Initial values:  D1 = 1;  D2 = 0;  D3 = 0;  D4 = 0;
+    D1r = 1;
+    D1i = D2r = D2i = D3r = D3i = D4r = D4i = 0;
+
+    // Start iterating.
+    for (i = 0; i < period; i++) {
+      // No need to iterate Z; values are already in 'cycle'.
+      //Zr = cycle[i][0];
+      //Zi = cycle[i][1];
+
+      // D1 = 2 * Z * D1;
+      D1rT = 2 * (x * D1r - y * D1i);
+      D1iT = 2 * (y * D1r + x * D1i);
+
+      // D2 = 2 * Z * D2 + 1;
+      D2rT = 2 * (x * D2r - y * D2i) + 1;
+      D2iT = 2 * (y * D2r + x * D2i);
+
+      // D3 = 2 * (D1^2 + Z * D3);
+      D3rT = 2 * ((x * D3r - y * D3i) + (D1r * D1r - D1i * D1i));
+      D3iT = 2 * ((x * D3i + y * D3r) + (2 * D1r * D1i));
+
+      // D4 = 2 * (D1 * D2 + Z * D4);
+      D4rT = 2 * ((x * D4r - y * D4i) + (D1r * D2r - D1i * D2i));
+      D4iT = 2 * ((x * D4i + y * D4r) + (D1r * D2i + D1i * D2r));
+
+      // Update variables.
+      D1r = D1rT;  D1i = D1iT;
+      D2r = D2rT;  D2i = D2iT;
+      D3r = D3rT;  D3i = D3iT;
+      D4r = D4rT;  D4i = D4iT;
+      
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+    }
+
+    // A = 1 - |D1|^2;
+    double A = 1 - (D1r * D1r + D1i * D1i);
+    // B = |D4 + D3 * (D2 / (1 - D1))|;
+    double B = (1 - D1r) * (1 - D1r) + D1i * D1i;
+    D1rT = (D2r * (1 - D1r) - D2i * D1i) / B;
+    D1iT = (D2i * (1 - D1r) + D2r * D1i) / B;
+    D2rT = D4r + (D3r * D1rT - D3i * D1iT);
+    D2iT = D4i + (D3i * D1rT + D3r * D1iT);
+    B    = sqrt(D2rT * D2rT + D2iT * D2iT);
+
+    // Return lower bound -that is, 1/4 the estimated bound.
+    return A / (4.0 * B);
+  }

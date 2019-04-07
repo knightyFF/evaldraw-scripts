@@ -1,0 +1,40 @@
+(x,y){
+   hbw=0.3;hbh=.3;
+   bailout=128;
+   pixr=sqrt(2)*2/640;//taille du pixel
+   cbx=.76;//(mousx-0.5*xres)*0.01;
+   cby=-0.7;//(0.5*yres-mousy)*0.01;
+   cx=x;cy=y;
+   r1=pixr*0;rc=r1;
+   i=bailout;
+   d=dist2box(x,y,cbx,cby,hbw,hbh);
+   r2=x*x+y*y;k=0.;
+   dx=1;dy=0;
+   while(i>0 && r2<1600){
+      //r=sqrt(r2);
+      //r1=(rc+2*r*r1+(r1*k)^2);
+      //k*=k;
+      dxx=2*(x*dx-y*dy);
+      dy=2*(x*dy+y*dx); dx=dxx+1;
+      dr=sqrt(dx*dx+dy*dy);
+      xx=x*x-y*y+cx;
+      yy=2*x*y+cy;
+      x=xx;y=yy;
+      r=sqrt(x*x+y*y);
+      de=0.5*(r-2)*log(r);
+      if(r>2) de=max(de,dist2box(x,y,cbx,cby,hbw,hbh))/dr;
+      else de=dist2box(x,y,cbx,cby,hbw,hbh)/dr;
+      d=min(d,de);
+      i--;
+      r2=x*x+y*y;
+   }
+   //d=de/dr;
+   if(i==0)d=0;
+   d^0.25
+}
+dist2box(x,y,cbx,cby,hbw,hbh){
+   x-=cbx;y-=cby;
+   x=abs(x)-hbw;y=abs(y)-hbh;
+   if(max(x,y)<0) return max(x,y);
+   sqrt(max(0,x)^2+max(0,y)^2)
+}

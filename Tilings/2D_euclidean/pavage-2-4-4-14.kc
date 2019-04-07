@@ -1,0 +1,12 @@
+static a[3]={0,1,0};
+static b[3]={1,0,0};
+static c[3]={-sqrt(2)/2,-sqrt(2)/2,sqrt(2)/2};
+(x,y,&r,&g,&b){
+   x=abs(x-2*(1+floor(x*0.5-0.5)));
+   y=abs(y-2*(1+floor(y*0.5-0.5)));
+   
+   t=min(1-x-y,0);
+   x+=t;y+=t;
+
+   pic(mousx+100*x,mousy+100*y,r,g,b);
+}

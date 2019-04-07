@@ -1,0 +1,203 @@
+#define _EPS 2^-35 //epsilon.
+static maxiter=100;
+static bailout=4;
+static frm=-1;
+(x,y){
+   static mx,my,dist;
+   if(numframes>frm){
+      frm=numframes;
+      mx=(mousx-0.5*xres)*0.005;
+      my=(0.5*yres-mousy)*0.005;
+      dist=mandel0(mx,my);
+   }
+   if((x-mx)^2+(y-my)^2<dist^2) return 0;
+   p=mandel0(x,y);
+   abs(p)^0.125
+}
+mandel0(cx,cy){
+   x=cx; y=cy;
+   r2=x*x+y*y;
+   i=0; 
+   imin=0;minr2=1000;
+   if(r2>bailout) return getExteriorLowerBound(cx,cy);
+   if(r2<minr2){ minr2=r2; imin=i+1;}
+   mi=1;
+   xf=x;yf=y;
+   period=solve(imin,cx,cy,_EPS,xf,yf);
+   if(period>0) return -period;
+   do{
+      
+      mi*=2;
+      while(i<mi){      
+         i++;
+         xx=x*x-y*y+cx;
+         y=2*x*y+cy; x=xx;
+      
+         r2=x*x+y*y;
+         if(r2<minr2){ minr2=r2; imin=i+1;}
+         if(r2>bailout) return getExteriorLowerBound(cx,cy);
+         
+      }
+      xf=x;yf=y;
+      period=solve(imin,cx,cy,_EPS,xf,yf);
+      if(period>0) return -period;      
+   } while (mi<maxiter);
+   getExteriorLowerBound(cx,cy);
+}
+getw(n,cx,cy,x,y,&wx,&wy){
+   dx=1; dy=0;
+   r2=x*x+y*y;
+   for(i=0;i<n && r2<bailout;i++){
+      dxx=2*(dx*x-dy*y);
+      dy=2*(dx*y+dy*x); dx=dxx;
+      
+      xx=x*x-y*y+cx;
+      y=2*x*y+cy; x=xx;
+      
+      r2=x*x+y*y;
+   }
+   wx=dx; wy=dy;
+}
+mandelperiod(n,cx,cy,eps,x,y){
+   x0=x; y0=y;
+   for(i=0;i<n;i++){
+      xx=x*x-y*y+cx;
+      y=2*x*y+cy; x=xx;
+      r=(x-x0)^2+(y-y0)^2;
+      if(r<eps) break;
+   }
+   i+1
+}
+mandel1(n,cx,cy,&x,&y,&dx,&dy){
+   dx=1; dy=0;
+   r2=x*x+y*y;
+   for(i=0;i<n && r2<bailout;i++){
+      dxx=2*(dx*x-dy*y);
+      dy=2*(dx*y+dy*x); dx=dxx;
+      
+      xx=x*x-y*y+cx;
+      y=2*x*y+cy; x=xx;
+      
+      r2=x*x+y*y;
+   }
+}
+solve(n,cx,cy,eps,&x,&y){
+   dfx=0;dfy=0;
+   for(i=0;i<20;i++){
+      fx=x; fy=y; 
+      mandel1(n,cx,cy,fx,fy,dfx,dfy);
+      //if(dfx*dfx+dfy*dfy>=1) return 0;
+      //lhs of equation
+      gx=fx-x; gy=fy-y;
+      //derivative of lhs
+      dgx=dfx-1; dgy=dfy;
+      //invert derivative
+      dg2=1/(dgx*dgx+dgy*dgy);
+      dgy*=-dg2;
+      dgx*=dg2;
+      //delta
+      fx=gx*dgx-gy*dgy;
+      fy=gx*dgy+gy*dgx;
+      //update z
+      x-=fx; y-=fy;
+      if((fx*fx+fy*fy)<eps*eps || (x*x+y*y)>bailout){
+         n=mandelperiod(n,cx,cy,eps,x,y);
+         fx=x; fy=y;
+         mandel1(n,cx,cy,&fx,&fy,&dfx,&dfy);
+   
+         if(dfx*dfx+dfy*dfy>=1-eps) return 0;
+         if(fx*fx+fy*fy>bailout) return -1;
+   
+         return getInteriorLowerBound(x,y,cx,cy,n);
+      }
+   }
+   0;
+}
+/** http://usuarios.multimania.es/llopsite/BuddhaBrotA2.htm
+   * Calculates a lower bound for the distance between C 
+   * and the closest point in the border of M.
+   * @param cycle double[][] - C's periodic cycle.
+   * @return double - The interior distance estimation.
+   */
+getInteriorLowerBound(x,y,cx,cy,period) {
+    // Real and imaginary components for complex numbers D1, D2, D3, and D4;
+    // and temporary variables to store the complex numbers in recursion.
+    double Zr, Zi, D1r, D1i, D2r, D2i, D3r, D3i, D4r, D4i;
+    double D1rT, D1iT, D2rT, D2iT, D3rT, D3iT, D4rT, D4iT;
+
+    // Initial values:  D1 = 1;  D2 = 0;  D3 = 0;  D4 = 0;
+    D1r = 1;
+    D1i = D2r = D2i = D3r = D3i = D4r = D4i = 0;
+
+    // Start iterating.
+    for (i = 0; i < period; i++) {
+      // No need to iterate Z; values are already in 'cycle'.
+      //Zr = cycle[i][0];
+      //Zi = cycle[i][1];
+
+      // D1 = 2 * Z * D1;
+      D1rT = 2 * (x * D1r - y * D1i);
+      D1iT = 2 * (y * D1r + x * D1i);
+
+      // D2 = 2 * Z * D2 + 1;
+      D2rT = 2 * (x * D2r - y * D2i) + 1;
+      D2iT = 2 * (y * D2r + x * D2i);
+
+      // D3 = 2 * (D1^2 + Z * D3);
+      D3rT = 2 * ((x * D3r - y * D3i) + (D1r * D1r - D1i * D1i));
+      D3iT = 2 * ((x * D3i + y * D3r) + (2 * D1r * D1i));
+
+      // D4 = 2 * (D1 * D2 + Z * D4);
+      D4rT = 2 * ((x * D4r - y * D4i) + (D1r * D2r - D1i * D2i));
+      D4iT = 2 * ((x * D4i + y * D4r) + (D1r * D2i + D1i * D2r));
+
+      // Update variables.
+      D1r = D1rT;  D1i = D1iT;
+      D2r = D2rT;  D2i = D2iT;
+      D3r = D3rT;  D3i = D3iT;
+      D4r = D4rT;  D4i = D4iT;
+      
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+    }
+
+    // A = 1 - |D1|^2;
+    double A = 1 - (D1r * D1r + D1i * D1i);
+    // B = |D4 + D3 * (D2 / (1 - D1))|;
+    double B = (1 - D1r) * (1 - D1r) + D1i * D1i;
+    D1rT = (D2r * (1 - D1r) - D2i * D1i) / B;
+    D1iT = (D2i * (1 - D1r) + D2r * D1i) / B;
+    D2rT = D4r + (D3r * D1rT - D3i * D1iT);
+    D2iT = D4i + (D3i * D1rT + D3r * D1iT);
+    B    = sqrt(D2rT * D2rT + D2iT * D2iT);
+
+    // Return lower bound -that is, 1/4 the estimated bound.
+    return A / (4.0 * B);
+  }
+getExteriorLowerBound1(cx,cy,x,y,dx,dy){
+   i=1000;
+   r2=x*x+y*y;
+   while(r2<2^53 && i>0){
+      dxx=2*(x*dx-y*dy)+1;dy=2*(x*dy+y*dx);dx=dxx;
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+      r2=x*x+y*y;
+      i--;
+   }
+   if(i==0) return 0;
+   r=sqrt(r2);dr=sqrt(dx*dx+dy*dy);
+   0.5*log(r)*r/dr;
+}
+getExteriorLowerBound(cx,cy){
+   dx=1;dy=0;
+   x=cx; y=cy;
+   i=1000;
+   r2=x*x+y*y;
+   while(r2<2^53 && i>0){
+      dxx=2*(x*dx-y*dy)+1;dy=2*(x*dy+y*dx);dx=dxx;
+      xx=x*x-y*y+cx;y=2*x*y+cy;x=xx;
+      r2=x*x+y*y;
+      i--;
+   }
+   if(i==0) return 0;
+   r=sqrt(r2);dr=sqrt(dx*dx+dy*dy);
+   0.5*log(r)*r/dr;
+}
